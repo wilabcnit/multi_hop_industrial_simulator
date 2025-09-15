@@ -5,7 +5,7 @@
 """
 import numpy as np
 
-from timessim.network.ue import Ue
+from multi_hop_industrial_simulator.network.ue import Ue
 import sys
 import math
 

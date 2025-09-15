@@ -4,7 +4,7 @@
     @Note: simulator_tick_duration must be in seconds
 """
 
-from timessim.network.bs import BS
+from multi_hop_industrial_simulator.network.bs import BS
 import sys
 import math
 

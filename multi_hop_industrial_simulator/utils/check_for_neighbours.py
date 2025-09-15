@@ -2,12 +2,12 @@ import math
 import numpy as np
 import random
 
-from timessim.network.bs import BS
-from timessim.network.ue import Ue
+from multi_hop_industrial_simulator.network.bs import BS
+from multi_hop_industrial_simulator.network.ue import Ue
 from numpy import ndarray
 
-from timessim.channel_models.THz_channel import THzChannel
-from timessim.env.machine import Machine
+from multi_hop_industrial_simulator.channel_models.THz_channel import THzChannel
+from multi_hop_industrial_simulator.env.machine import Machine
 
 # Function to check if UEs have neighbours or are connected to the BS
 def check_for_neighbours(ue_array: ndarray, machine_array: ndarray, bs: BS, input_snr_threshold_db: float,

@@ -1,10 +1,10 @@
 from copy import deepcopy
 import numpy as np
 
-from timessim.network.ue import Ue
-from timessim.utils.utils_for_tb_ualoha_with_dqn import compute_normalized_linear_interpolation
-from timessim.scheduler.DQN_agent_rl_mesh import epsilon_greedy_policy
-from timessim.utils.read_inputs import read_inputs
+from multi_hop_industrial_simulator.network.ue import Ue
+from multi_hop_industrial_simulator.utils.utils_for_tb_ualoha_with_dqn import compute_normalized_linear_interpolation
+from multi_hop_industrial_simulator.scheduler.DQN_agent_rl_mesh import epsilon_greedy_policy
+from multi_hop_industrial_simulator.utils.read_inputs import read_inputs
 
 inputs = read_inputs('inputs.yaml')
 

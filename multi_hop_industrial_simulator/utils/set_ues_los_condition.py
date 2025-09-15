@@ -2,11 +2,11 @@ from typing import List
 import numpy as np
 from numpy import ndarray
 
-from timessim.env.machine import Machine
-from timessim.network.bs import BS
-from timessim.network.ue import Ue
+from multi_hop_industrial_simulator.env.machine import Machine
+from multi_hop_industrial_simulator.network.bs import BS
+from multi_hop_industrial_simulator.network.ue import Ue
 
-from timessim.utils.read_inputs import read_inputs
+from multi_hop_industrial_simulator.utils.read_inputs import read_inputs
 
 inputs = read_inputs('inputs.yaml')
 

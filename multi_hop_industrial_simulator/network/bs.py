@@ -1,12 +1,12 @@
 """
 gNodeB class
 """
-from timessim.traffic_models.traffic_model import TrafficModel
-from timessim.network.packet import Packet
-from timessim.network.bs_buffer import BsBuffer
+from multi_hop_industrial_simulator.traffic_models.traffic_model import TrafficModel
+from multi_hop_industrial_simulator.network.packet import Packet
+from multi_hop_industrial_simulator.network.bs_buffer import BsBuffer
 import copy as cp
 import sys
-from timessim.network.ue import Ue
+from multi_hop_industrial_simulator.network.ue import Ue
 from typing import List
 import numpy as np
 import math

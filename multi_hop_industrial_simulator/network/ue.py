@@ -3,14 +3,14 @@ import copy as cp
 
 import numpy as np
 
-from timessim.traffic_models.traffic_model import TrafficModel
-from timessim.network.ue_buffer import UeBuffer
-from timessim.network.packet import Packet
+from multi_hop_industrial_simulator.traffic_models.traffic_model import TrafficModel
+from multi_hop_industrial_simulator.network.ue_buffer import UeBuffer
+from multi_hop_industrial_simulator.network.packet import Packet
 
 ##################################RL Implementation##################################
-from timessim.utils.utils_for_tb_ualoha_with_dqn import ttl_reset, select_input_DRL, compute_normalized_linear_interpolation
-from timessim.scheduler.DQN_agent_rl_mesh import PrioritizedReplayBuffer
-from timessim.utils.read_inputs import read_inputs
+from multi_hop_industrial_simulator.utils.utils_for_tb_ualoha_with_dqn import ttl_reset, select_input_DRL, compute_normalized_linear_interpolation
+from multi_hop_industrial_simulator.scheduler.DQN_agent_rl_mesh import PrioritizedReplayBuffer
+from multi_hop_industrial_simulator.utils.read_inputs import read_inputs
 
 inputs = read_inputs('inputs.yaml')
 DDQN = inputs.get('rl').get('agent').get('DDQN')

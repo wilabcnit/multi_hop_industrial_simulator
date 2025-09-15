@@ -1,7 +1,7 @@
 import numpy as np
 import copy as cp
 import matplotlib.pyplot as plt
-from timessim.utils.read_inputs import read_inputs
+from multi_hop_industrial_simulator.utils.read_inputs import read_inputs
 ######## Parameters ########
 
 ### Insert input.yaml ####

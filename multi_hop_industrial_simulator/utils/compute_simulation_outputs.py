@@ -4,7 +4,7 @@
 import sys
 import numpy as np
 
-from timessim.network.bs import BS
+from multi_hop_industrial_simulator.network.bs import BS
 from numpy import ndarray
 
 # Function to compute the outputs of the simulator

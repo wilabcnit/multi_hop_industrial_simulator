@@ -6,10 +6,10 @@ import numpy as np
 from pandas.core.frame import DataFrame
 from scipy import constants
 
-from timessim.network.ris import RIS
+from multi_hop_industrial_simulator.network.ris import RIS
 from numpy import ndarray
-from timessim.network.bs import BS
-from timessim.env.machine import Machine
+from multi_hop_industrial_simulator.network.bs import BS
+from multi_hop_industrial_simulator.env.machine import Machine
 from typing import List
 
 

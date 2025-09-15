@@ -2,9 +2,9 @@
 import os
 import sys
 
-from timessim.utils.plot_data import plot_curves
-from timessim.utils.plot_data import plot_curves
-from timessim.utils.read_simulation_output import read_simulation_output
+from multi_hop_industrial_simulator.utils.plot_data import plot_curves
+from multi_hop_industrial_simulator.utils.plot_data import plot_curves
+from multi_hop_industrial_simulator.utils.read_simulation_output import read_simulation_output
 from scipy import stats
 from scipy.stats import t
 
@@ -30,11 +30,11 @@ import matplotlib.pyplot as plt
 # ci_mualoha_static = []
 # mualoha_static_values = []
 #
-# MUALOHA_static_4ue = "./timessim/results/20240902_Paper_WCNC/ci_tl_ualoha_static/4_UE_pMac_MUALOHA_CI.json"
-# MUALOHA_static_6ue = "./timessim/results/20240902_Paper_WCNC/ci_tl_ualoha_static/6_UE_pMac_MUALOHA_CI.json"
-# MUALOHA_static_8ue = "./timessim/results/20240902_Paper_WCNC/ci_tl_ualoha_static/8_UE_pMac_MUALOHA_CI.json"
-# MUALOHA_static_10ue = "./timessim/results/20240902_Paper_WCNC/ci_tl_ualoha_static/10_UE_pMac_MUALOHA_CI.json"
-# MUALOHA_static_12ue = "./timessim/results/20240902_Paper_WCNC/ci_tl_ualoha_static/12_UE_pMac_MUALOHA_CI.json"
+# MUALOHA_static_4ue = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tl_ualoha_static/4_UE_pMac_MUALOHA_CI.json"
+# MUALOHA_static_6ue = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tl_ualoha_static/6_UE_pMac_MUALOHA_CI.json"
+# MUALOHA_static_8ue = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tl_ualoha_static/8_UE_pMac_MUALOHA_CI.json"
+# MUALOHA_static_10ue = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tl_ualoha_static/10_UE_pMac_MUALOHA_CI.json"
+# MUALOHA_static_12ue = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tl_ualoha_static/12_UE_pMac_MUALOHA_CI.json"
 #
 # x1_values, y_values_4ue = read_simulation_output(MUALOHA_static_4ue)
 # mualoha_static_values.append(y_values_4ue)
@@ -62,11 +62,11 @@ import matplotlib.pyplot as plt
 # ci_mualoha_dynamic = []
 # mualoha_dynamic_values = []
 #
-# MUALOHA_dynamic_4ue = "./timessim/results/20240902_Paper_WCNC/ci_tl_ualoha_dynamic/additional_result/4_UE_pMac_MUALOHA_dynamic_CI.json"
-# MUALOHA_dynamic_6ue = "./timessim/results/20240902_Paper_WCNC/ci_tl_ualoha_dynamic/additional_result/6_UE_pMac_MUALOHA_dynamic_CI.json"
-# MUALOHA_dynamic_8ue = "./timessim/results/20240902_Paper_WCNC/ci_tl_ualoha_dynamic/8_UE_pMac_MUALOHA_dynamic_CI.json"
-# MUALOHA_dynamic_10ue = "./timessim/results/20240902_Paper_WCNC/ci_tl_ualoha_dynamic/10_UE_pMac_MUALOHA_dynamic_CI.json"
-# MUALOHA_dynamic_12ue = "./timessim/results/20240902_Paper_WCNC/ci_tl_ualoha_dynamic/12_UE_pMac_MUALOHA_dynamic_CI.json"
+# MUALOHA_dynamic_4ue = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tl_ualoha_dynamic/additional_result/4_UE_pMac_MUALOHA_dynamic_CI.json"
+# MUALOHA_dynamic_6ue = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tl_ualoha_dynamic/additional_result/6_UE_pMac_MUALOHA_dynamic_CI.json"
+# MUALOHA_dynamic_8ue = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tl_ualoha_dynamic/8_UE_pMac_MUALOHA_dynamic_CI.json"
+# MUALOHA_dynamic_10ue = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tl_ualoha_dynamic/10_UE_pMac_MUALOHA_dynamic_CI.json"
+# MUALOHA_dynamic_12ue = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tl_ualoha_dynamic/12_UE_pMac_MUALOHA_dynamic_CI.json"
 #
 # x1_values, y_values_4ue = read_simulation_output(MUALOHA_dynamic_4ue)
 # mualoha_dynamic_values.append(y_values_4ue)
@@ -94,11 +94,11 @@ import matplotlib.pyplot as plt
 # ci_mualoha_dynamic_unicast = []
 # mualoha_dynamic_unicast_values = []
 #
-# MUALOHA_dynamic_unicast_4ue = "./timessim/results/20240902_Paper_WCNC/ci_tb_ualoha_dynamic/4_UE_pMac_MUALOHA_dynamic_CI.json"
-# MUALOHA_dynamic_unicast_6ue = "./timessim/results/20240902_Paper_WCNC/ci_tb_ualoha_dynamic/6_UE_pMac_MUALOHA_dynamic_CI.json"
-# MUALOHA_dynamic_unicast_8ue = "./timessim/results/20240902_Paper_WCNC/ci_tb_ualoha_dynamic/8_UE_pMac_MUALOHA_dynamic_CI.json"
-# MUALOHA_dynamic_unicast_10ue = "./timessim/results/20240902_Paper_WCNC/ci_tb_ualoha_dynamic/10_UE_pMac_MUALOHA_dynamic_CI.json"
-# MUALOHA_dynamic_unicast_12ue = "./timessim/results/20240902_Paper_WCNC/ci_tb_ualoha_dynamic/12_UE_pMac_MUALOHA_dynamic_CI.json"
+# MUALOHA_dynamic_unicast_4ue = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tb_ualoha_dynamic/4_UE_pMac_MUALOHA_dynamic_CI.json"
+# MUALOHA_dynamic_unicast_6ue = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tb_ualoha_dynamic/6_UE_pMac_MUALOHA_dynamic_CI.json"
+# MUALOHA_dynamic_unicast_8ue = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tb_ualoha_dynamic/8_UE_pMac_MUALOHA_dynamic_CI.json"
+# MUALOHA_dynamic_unicast_10ue = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tb_ualoha_dynamic/10_UE_pMac_MUALOHA_dynamic_CI.json"
+# MUALOHA_dynamic_unicast_12ue = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tb_ualoha_dynamic/12_UE_pMac_MUALOHA_dynamic_CI.json"
 #
 # x1_values, y_values_4ue = read_simulation_output(MUALOHA_dynamic_unicast_4ue)
 # mualoha_dynamic_unicast_values.append(y_values_4ue)
@@ -126,11 +126,11 @@ import matplotlib.pyplot as plt
 # ci_mualoha_unicast_static = []
 # mualoha_unicast_static_values = []
 #
-# MUALOHA_unicast_static_4ue = "./timessim/results/20240902_Paper_WCNC/ci_tb_ualoha_static/4_UE_pMac_MUALOHA_static_CI.json"
-# MUALOHA_unicast_static_6ue = "./timessim/results/20240902_Paper_WCNC/ci_tb_ualoha_static/6_UE_pMac_MUALOHA_static_CI.json"
-# MUALOHA_unicast_static_8ue = "./timessim/results/20240902_Paper_WCNC/ci_tb_ualoha_static/8_UE_pMac_MUALOHA_static_CI.json"
-# MUALOHA_unicast_static_10ue = "./timessim/results/20240902_Paper_WCNC/ci_tb_ualoha_static/10_UE_pMac_MUALOHA_static_CI.json"
-# MUALOHA_unicast_static_12ue = "./timessim/results/20240902_Paper_WCNC/ci_tb_ualoha_static/12_UE_pMac_MUALOHA_static_CI.json"
+# MUALOHA_unicast_static_4ue = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tb_ualoha_static/4_UE_pMac_MUALOHA_static_CI.json"
+# MUALOHA_unicast_static_6ue = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tb_ualoha_static/6_UE_pMac_MUALOHA_static_CI.json"
+# MUALOHA_unicast_static_8ue = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tb_ualoha_static/8_UE_pMac_MUALOHA_static_CI.json"
+# MUALOHA_unicast_static_10ue = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tb_ualoha_static/10_UE_pMac_MUALOHA_static_CI.json"
+# MUALOHA_unicast_static_12ue = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tb_ualoha_static/12_UE_pMac_MUALOHA_static_CI.json"
 #
 # x1_values, y_values_4ue = read_simulation_output(MUALOHA_unicast_static_4ue)
 # mualoha_unicast_static_values.append(y_values_4ue)
@@ -158,11 +158,11 @@ import matplotlib.pyplot as plt
 # ci_saloha = []
 # saloha_values = []  # TODO da fare!
 #
-# saloha_4ue = "./timessim/results/20240902_Paper_WCNC/ci_ualoha/4_UE_pMac_SUALOHA_CI.json"
-# saloha_6ue = "./timessim/results/20240902_Paper_WCNC/ci_ualoha/6_UE_pMac_SUALOHA_CI.json"
-# saloha_8ue = "./timessim/results/20240902_Paper_WCNC/ci_ualoha/8_UE_pMac_SUALOHA_CI.json"
-# saloha_10ue = "./timessim/results/20240902_Paper_WCNC/ci_ualoha/10_UE_pMac_SUALOHA_CI.json"
-# saloha_12ue = "./timessim/results/20240902_Paper_WCNC/ci_ualoha/12_UE_pMac_SUALOHA_CI.json"
+# saloha_4ue = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_ualoha/4_UE_pMac_SUALOHA_CI.json"
+# saloha_6ue = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_ualoha/6_UE_pMac_SUALOHA_CI.json"
+# saloha_8ue = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_ualoha/8_UE_pMac_SUALOHA_CI.json"
+# saloha_10ue = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_ualoha/10_UE_pMac_SUALOHA_CI.json"
+# saloha_12ue = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_ualoha/12_UE_pMac_SUALOHA_CI.json"
 #
 # x1_values, y_values_4ue = read_simulation_output(saloha_4ue)
 # saloha_values.append(y_values_4ue)
@@ -221,11 +221,11 @@ import matplotlib.pyplot as plt
 # ci_mualoha_static = []
 # mualoha_static_values = []
 #
-# MUALOHA_static_4ue = "./timessim/results/20240902_Paper_WCNC/ci_tl_ualoha_static/4_UE_Jindex_MUALOHA_CI.json"
-# MUALOHA_static_6ue = "./timessim/results/20240902_Paper_WCNC/ci_tl_ualoha_static/6_UE_Jindex_MUALOHA_CI.json"
-# MUALOHA_static_8ue = "./timessim/results/20240902_Paper_WCNC/ci_tl_ualoha_static/8_UE_Jindex_MUALOHA_CI.json"
-# MUALOHA_static_10ue = "./timessim/results/20240902_Paper_WCNC/ci_tl_ualoha_static/10_UE_Jindex_MUALOHA_CI.json"
-# MUALOHA_static_12ue = "./timessim/results/20240902_Paper_WCNC/ci_tl_ualoha_static/12_UE_Jindex_MUALOHA_CI.json"
+# MUALOHA_static_4ue = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tl_ualoha_static/4_UE_Jindex_MUALOHA_CI.json"
+# MUALOHA_static_6ue = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tl_ualoha_static/6_UE_Jindex_MUALOHA_CI.json"
+# MUALOHA_static_8ue = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tl_ualoha_static/8_UE_Jindex_MUALOHA_CI.json"
+# MUALOHA_static_10ue = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tl_ualoha_static/10_UE_Jindex_MUALOHA_CI.json"
+# MUALOHA_static_12ue = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tl_ualoha_static/12_UE_Jindex_MUALOHA_CI.json"
 #
 # x1_values, y_values_4ue = read_simulation_output(MUALOHA_static_4ue)
 # mualoha_static_values.append(y_values_4ue)
@@ -253,11 +253,11 @@ import matplotlib.pyplot as plt
 # ci_mualoha_dynamic = []
 # mualoha_dynamic_values = []
 #
-# MUALOHA_dynamic_4ue = "./timessim/results/20240902_Paper_WCNC/ci_tl_ualoha_dynamic/additional_result/4_UE_Jindex_MUALOHA_dynamic_CI.json"
-# MUALOHA_dynamic_6ue = "./timessim/results/20240902_Paper_WCNC/ci_tl_ualoha_dynamic/6_UE_Jindex_MUALOHA_dynamic_CI.json"
-# MUALOHA_dynamic_8ue = "./timessim/results/20240902_Paper_WCNC/ci_tl_ualoha_dynamic/8_UE_Jindex_MUALOHA_dynamic_CI.json"
-# MUALOHA_dynamic_10ue = "./timessim/results/20240902_Paper_WCNC/ci_tl_ualoha_dynamic/10_UE_Jindex_MUALOHA_dynamic_CI.json"
-# MUALOHA_dynamic_12ue = "./timessim/results/20240902_Paper_WCNC/ci_tl_ualoha_dynamic/12_UE_Jindex_MUALOHA_dynamic_CI.json"
+# MUALOHA_dynamic_4ue = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tl_ualoha_dynamic/additional_result/4_UE_Jindex_MUALOHA_dynamic_CI.json"
+# MUALOHA_dynamic_6ue = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tl_ualoha_dynamic/6_UE_Jindex_MUALOHA_dynamic_CI.json"
+# MUALOHA_dynamic_8ue = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tl_ualoha_dynamic/8_UE_Jindex_MUALOHA_dynamic_CI.json"
+# MUALOHA_dynamic_10ue = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tl_ualoha_dynamic/10_UE_Jindex_MUALOHA_dynamic_CI.json"
+# MUALOHA_dynamic_12ue = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tl_ualoha_dynamic/12_UE_Jindex_MUALOHA_dynamic_CI.json"
 #
 # x1_values, y_values_4ue = read_simulation_output(MUALOHA_dynamic_4ue)
 # mualoha_dynamic_values.append(y_values_4ue)
@@ -285,11 +285,11 @@ import matplotlib.pyplot as plt
 # ci_mualoha_dynamic_unicast = []
 # mualoha_dynamic_unicast_values = []
 #
-# MUALOHA_dynamic_unicast_4ue = "./timessim/results/20240902_Paper_WCNC/ci_tb_ualoha_dynamic/4_UE_Jindex_MUALOHA_dynamic_CI.json"
-# MUALOHA_dynamic_unicast_6ue = "./timessim/results/20240902_Paper_WCNC/ci_tb_ualoha_dynamic/6_UE_Jindex_MUALOHA_dynamic_CI.json"
-# MUALOHA_dynamic_unicast_8ue = "./timessim/results/20240902_Paper_WCNC/ci_tb_ualoha_dynamic/8_UE_Jindex_MUALOHA_dynamic_CI.json"
-# MUALOHA_dynamic_unicast_10ue = "./timessim/results/20240902_Paper_WCNC/ci_tb_ualoha_dynamic/10_UE_Jindex_MUALOHA_dynamic_CI.json"
-# MUALOHA_dynamic_unicast_12ue = "./timessim/results/20240902_Paper_WCNC/ci_tb_ualoha_dynamic/12_UE_Jindex_MUALOHA_dynamic_CI.json"
+# MUALOHA_dynamic_unicast_4ue = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tb_ualoha_dynamic/4_UE_Jindex_MUALOHA_dynamic_CI.json"
+# MUALOHA_dynamic_unicast_6ue = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tb_ualoha_dynamic/6_UE_Jindex_MUALOHA_dynamic_CI.json"
+# MUALOHA_dynamic_unicast_8ue = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tb_ualoha_dynamic/8_UE_Jindex_MUALOHA_dynamic_CI.json"
+# MUALOHA_dynamic_unicast_10ue = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tb_ualoha_dynamic/10_UE_Jindex_MUALOHA_dynamic_CI.json"
+# MUALOHA_dynamic_unicast_12ue = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tb_ualoha_dynamic/12_UE_Jindex_MUALOHA_dynamic_CI.json"
 #
 # x1_values, y_values_4ue = read_simulation_output(MUALOHA_dynamic_unicast_4ue)
 # mualoha_dynamic_unicast_values.append(y_values_4ue)
@@ -317,11 +317,11 @@ import matplotlib.pyplot as plt
 # ci_mualoha_unicast_static = []
 # mualoha_unicast_static_values = []
 #
-# MUALOHA_unicast_static_4ue = "./timessim/results/20240902_Paper_WCNC/ci_tb_ualoha_static/4_UE_Jindex_MUALOHA_static_CI.json"
-# MUALOHA_unicast_static_6ue = "./timessim/results/20240902_Paper_WCNC/ci_tb_ualoha_static/6_UE_Jindex_MUALOHA_static_CI.json"
-# MUALOHA_unicast_static_8ue = "./timessim/results/20240902_Paper_WCNC/ci_tb_ualoha_static/8_UE_Jindex_MUALOHA_static_CI.json"
-# MUALOHA_unicast_static_10ue = "./timessim/results/20240902_Paper_WCNC/ci_tb_ualoha_static/10_UE_Jindex_MUALOHA_static_CI.json"
-# MUALOHA_unicast_static_12ue = "./timessim/results/20240902_Paper_WCNC/ci_tb_ualoha_static/12_UE_Jindex_MUALOHA_static_CI.json"
+# MUALOHA_unicast_static_4ue = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tb_ualoha_static/4_UE_Jindex_MUALOHA_static_CI.json"
+# MUALOHA_unicast_static_6ue = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tb_ualoha_static/6_UE_Jindex_MUALOHA_static_CI.json"
+# MUALOHA_unicast_static_8ue = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tb_ualoha_static/8_UE_Jindex_MUALOHA_static_CI.json"
+# MUALOHA_unicast_static_10ue = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tb_ualoha_static/10_UE_Jindex_MUALOHA_static_CI.json"
+# MUALOHA_unicast_static_12ue = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tb_ualoha_static/12_UE_Jindex_MUALOHA_static_CI.json"
 #
 # x1_values, y_values_4ue = read_simulation_output(MUALOHA_unicast_static_4ue)
 # mualoha_unicast_static_values.append(y_values_4ue)
@@ -349,11 +349,11 @@ import matplotlib.pyplot as plt
 # ci_saloha = []
 # saloha_values = []
 #
-# saloha_4ue = "./timessim/results/20240902_Paper_WCNC/ci_ualoha/4_UE_Jindex_SUALOHA_CI.json"
-# saloha_6ue = "./timessim/results/20240902_Paper_WCNC/ci_ualoha/6_UE_Jindex_SUALOHA_CI.json"
-# saloha_8ue = "./timessim/results/20240902_Paper_WCNC/ci_ualoha/8_UE_Jindex_SUALOHA_CI.json"
-# saloha_10ue = "./timessim/results/20240902_Paper_WCNC/ci_ualoha/10_UE_Jindex_SUALOHA_CI.json"
-# saloha_12ue = "./timessim/results/20240902_Paper_WCNC/ci_ualoha/12_UE_Jindex_SUALOHA_CI.json"
+# saloha_4ue = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_ualoha/4_UE_Jindex_SUALOHA_CI.json"
+# saloha_6ue = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_ualoha/6_UE_Jindex_SUALOHA_CI.json"
+# saloha_8ue = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_ualoha/8_UE_Jindex_SUALOHA_CI.json"
+# saloha_10ue = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_ualoha/10_UE_Jindex_SUALOHA_CI.json"
+# saloha_12ue = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_ualoha/12_UE_Jindex_SUALOHA_CI.json"
 #
 # x1_values, y_values_4ue = read_simulation_output(saloha_4ue)
 # saloha_values.append(y_values_4ue)
@@ -411,11 +411,11 @@ import matplotlib.pyplot as plt
 # ci_mualoha_dynamic_Q4 = []
 # mualoha_dynamic_values_Q4 = []
 #
-# MUALOHA_dynamic_20B_Q4 = "./timessim/results/20240902_Paper_WCNC/ci_tl_ualoha_dynamic_12UE/12UE-20byte-Q4/12_UE_pMac_MUALOHA_dynamic_CI.json"
-# MUALOHA_dynamic_40B_Q4 = "./timessim/results/20240902_Paper_WCNC/ci_tl_ualoha_dynamic_12UE/12UE-40byte-Q4/12_UE_pMac_MUALOHA_dynamic_CI.json"
-# MUALOHA_dynamic_60B_Q4 = "./timessim/results/20240902_Paper_WCNC/ci_tl_ualoha_dynamic_12UE/12UE-60byte-Q4/12_UE_pMac_MUALOHA_dynamic_CI.json"
-# MUALOHA_dynamic_80B_Q4 = "./timessim/results/20240902_Paper_WCNC/ci_tl_ualoha_dynamic_12UE/12UE-80byte-Q4/12_UE_pMac_MUALOHA_dynamic_CI.json"
-# MUALOHA_dynamic_100B_Q4 = "./timessim/results/20240902_Paper_WCNC/ci_tl_ualoha_dynamic_12UE/12UE-100byte-Q4/12_UE_pMac_MUALOHA_dynamic_CI.json"
+# MUALOHA_dynamic_20B_Q4 = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tl_ualoha_dynamic_12UE/12UE-20byte-Q4/12_UE_pMac_MUALOHA_dynamic_CI.json"
+# MUALOHA_dynamic_40B_Q4 = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tl_ualoha_dynamic_12UE/12UE-40byte-Q4/12_UE_pMac_MUALOHA_dynamic_CI.json"
+# MUALOHA_dynamic_60B_Q4 = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tl_ualoha_dynamic_12UE/12UE-60byte-Q4/12_UE_pMac_MUALOHA_dynamic_CI.json"
+# MUALOHA_dynamic_80B_Q4 = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tl_ualoha_dynamic_12UE/12UE-80byte-Q4/12_UE_pMac_MUALOHA_dynamic_CI.json"
+# MUALOHA_dynamic_100B_Q4 = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tl_ualoha_dynamic_12UE/12UE-100byte-Q4/12_UE_pMac_MUALOHA_dynamic_CI.json"
 #
 # x1_values, y_values_20B = read_simulation_output(MUALOHA_dynamic_20B_Q4)
 # mualoha_dynamic_values_Q4.append(y_values_20B)
@@ -443,11 +443,11 @@ import matplotlib.pyplot as plt
 # ci_mualoha_dynamic_unicast_Q4 = []
 # mualoha_dynamic_values_unicast_Q4 = []
 #
-# MUALOHA_dynamic_unicast_20B_Q4 = "./timessim/results/20240902_Paper_WCNC/ci_tl_ualoha_dynamic_12UE/12UE-20byte-Q4/12_UE_pMac_MUALOHA_dynamic_CI.json"
-# MUALOHA_dynamic_unicast_40B_Q4 = "./timessim/results/20240902_Paper_WCNC/ci_tl_ualoha_dynamic_12UE/12UE-40byte-Q4/12_UE_pMac_MUALOHA_dynamic_CI.json"
-# MUALOHA_dynamic_unicast_60B_Q4 = "./timessim/results/20240902_Paper_WCNC/ci_tl_ualoha_dynamic_12UE/12UE-60byte-Q4/12_UE_pMac_MUALOHA_dynamic_CI.json"
-# MUALOHA_dynamic_unicast_80B_Q4 = "./timessim/results/20240902_Paper_WCNC/ci_tl_ualoha_dynamic_12UE/12UE-80byte-Q4/12_UE_pMac_MUALOHA_dynamic_CI.json"
-# MUALOHA_dynamic_unicast_100B_Q4 = "./timessim/results/20240902_Paper_WCNC/ci_tl_ualoha_dynamic_12UE/12UE-100byte-Q4/12_UE_pMac_MUALOHA_dynamic_CI.json"
+# MUALOHA_dynamic_unicast_20B_Q4 = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tl_ualoha_dynamic_12UE/12UE-20byte-Q4/12_UE_pMac_MUALOHA_dynamic_CI.json"
+# MUALOHA_dynamic_unicast_40B_Q4 = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tl_ualoha_dynamic_12UE/12UE-40byte-Q4/12_UE_pMac_MUALOHA_dynamic_CI.json"
+# MUALOHA_dynamic_unicast_60B_Q4 = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tl_ualoha_dynamic_12UE/12UE-60byte-Q4/12_UE_pMac_MUALOHA_dynamic_CI.json"
+# MUALOHA_dynamic_unicast_80B_Q4 = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tl_ualoha_dynamic_12UE/12UE-80byte-Q4/12_UE_pMac_MUALOHA_dynamic_CI.json"
+# MUALOHA_dynamic_unicast_100B_Q4 = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tl_ualoha_dynamic_12UE/12UE-100byte-Q4/12_UE_pMac_MUALOHA_dynamic_CI.json"
 #
 # x1_values, y_values_unicast_20B = read_simulation_output(MUALOHA_dynamic_unicast_20B_Q4)
 # mualoha_dynamic_values_unicast_Q4.append(y_values_unicast_20B)
@@ -475,11 +475,11 @@ import matplotlib.pyplot as plt
 # ci_mualoha_dynamic_Q8 = []
 # mualoha_dynamic_values_Q8 = []
 #
-# MUALOHA_dynamic_20B_Q8 = "./timessim/results/20240902_Paper_WCNC/ci_tl_ualoha_dynamic_12UE/12UE-20byte-Q8/12_UE_pMac_MUALOHA_dynamic_CI.json"
-# MUALOHA_dynamic_40B_Q8 = "./timessim/results/20240902_Paper_WCNC/ci_tl_ualoha_dynamic_12UE/12UE-40byte-Q8/12_UE_pMac_MUALOHA_dynamic_CI.json"
-# MUALOHA_dynamic_60B_Q8 = "./timessim/results/20240902_Paper_WCNC/ci_tl_ualoha_dynamic_12UE/12UE-60byte-Q8/12_UE_pMac_MUALOHA_dynamic_CI.json"
-# MUALOHA_dynamic_80B_Q8 = "./timessim/results/20240902_Paper_WCNC/ci_tl_ualoha_dynamic_12UE/12UE-80byte-Q8/12_UE_pMac_MUALOHA_dynamic_CI.json"
-# MUALOHA_dynamic_100B_Q8 = "./timessim/results/20240902_Paper_WCNC/ci_tl_ualoha_dynamic_12UE/12UE-100byte-Q8/12_UE_pMac_MUALOHA_dynamic_CI.json"
+# MUALOHA_dynamic_20B_Q8 = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tl_ualoha_dynamic_12UE/12UE-20byte-Q8/12_UE_pMac_MUALOHA_dynamic_CI.json"
+# MUALOHA_dynamic_40B_Q8 = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tl_ualoha_dynamic_12UE/12UE-40byte-Q8/12_UE_pMac_MUALOHA_dynamic_CI.json"
+# MUALOHA_dynamic_60B_Q8 = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tl_ualoha_dynamic_12UE/12UE-60byte-Q8/12_UE_pMac_MUALOHA_dynamic_CI.json"
+# MUALOHA_dynamic_80B_Q8 = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tl_ualoha_dynamic_12UE/12UE-80byte-Q8/12_UE_pMac_MUALOHA_dynamic_CI.json"
+# MUALOHA_dynamic_100B_Q8 = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tl_ualoha_dynamic_12UE/12UE-100byte-Q8/12_UE_pMac_MUALOHA_dynamic_CI.json"
 #
 # x1_values, y_values_20B = read_simulation_output(MUALOHA_dynamic_20B_Q8)
 # mualoha_dynamic_values_Q8.append(y_values_20B)
@@ -507,11 +507,11 @@ import matplotlib.pyplot as plt
 # ci_mualoha_dynamic_unicast_Q8 = []
 # mualoha_dynamic_values_unicast_Q8 = []
 #
-# MUALOHA_dynamic_unicast_20B_Q8 = "./timessim/results/20240902_Paper_WCNC/ci_tb_ualoha_dynamic_12UE/12UE-20byte-Q8/12_UE_pMac_MUALOHA_dynamic_CI.json"
-# MUALOHA_dynamic_unicast_40B_Q8 = "./timessim/results/20240902_Paper_WCNC/ci_tb_ualoha_dynamic_12UE/12UE-40byte-Q8/12_UE_pMac_MUALOHA_dynamic_CI.json"
-# MUALOHA_dynamic_unicast_60B_Q8 = "./timessim/results/20240902_Paper_WCNC/ci_tb_ualoha_dynamic_12UE/12UE-60byte-Q8/12_UE_pMac_MUALOHA_dynamic_CI.json"
-# MUALOHA_dynamic_unicast_80B_Q8 = "./timessim/results/20240902_Paper_WCNC/ci_tb_ualoha_dynamic_12UE/12UE-80byte-Q8/12_UE_pMac_MUALOHA_dynamic_CI.json"
-# MUALOHA_dynamic_unicast_100B_Q8 = "./timessim/results/20240902_Paper_WCNC/ci_tb_ualoha_dynamic_12UE/12UE-100byte-Q8/12_UE_pMac_MUALOHA_dynamic_CI.json"
+# MUALOHA_dynamic_unicast_20B_Q8 = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tb_ualoha_dynamic_12UE/12UE-20byte-Q8/12_UE_pMac_MUALOHA_dynamic_CI.json"
+# MUALOHA_dynamic_unicast_40B_Q8 = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tb_ualoha_dynamic_12UE/12UE-40byte-Q8/12_UE_pMac_MUALOHA_dynamic_CI.json"
+# MUALOHA_dynamic_unicast_60B_Q8 = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tb_ualoha_dynamic_12UE/12UE-60byte-Q8/12_UE_pMac_MUALOHA_dynamic_CI.json"
+# MUALOHA_dynamic_unicast_80B_Q8 = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tb_ualoha_dynamic_12UE/12UE-80byte-Q8/12_UE_pMac_MUALOHA_dynamic_CI.json"
+# MUALOHA_dynamic_unicast_100B_Q8 = "./multi_hop_industrial_simulator/results/20240902_Paper_WCNC/ci_tb_ualoha_dynamic_12UE/12UE-100byte-Q8/12_UE_pMac_MUALOHA_dynamic_CI.json"
 #
 # x1_values, y_values_unicast_20B = read_simulation_output(MUALOHA_dynamic_unicast_20B_Q8)
 # mualoha_dynamic_values_unicast_Q8.append(y_values_unicast_20B)

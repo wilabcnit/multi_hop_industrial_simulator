@@ -5,11 +5,11 @@ import numpy as np
 from math import log10
 from scipy import constants as ct
 
-from timessim.utils.read_input_file import read_input_file
-from timessim.utils.get_antenna_gain_db import get_antenna_gain_db
-from timessim.network.ue import Ue
-from timessim.network.bs import BS
-from timessim.channel_models import THz_channel
+from multi_hop_industrial_simulator.utils.read_input_file import read_input_file
+from multi_hop_industrial_simulator.utils.get_antenna_gain_db import get_antenna_gain_db
+from multi_hop_industrial_simulator.network.ue import Ue
+from multi_hop_industrial_simulator.network.bs import BS
+from multi_hop_industrial_simulator.channel_models import THz_channel
 
 # Function to compute the maximum propagation delay (in seconds) given the maximum transmission range
 def compute_max_prop_delay_tx_range(ue: Ue, bs: BS, input_thz_channel: THz_channel,

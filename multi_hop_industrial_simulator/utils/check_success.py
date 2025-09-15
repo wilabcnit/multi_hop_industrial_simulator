@@ -1,11 +1,11 @@
 import numpy as np
 from scipy.special import erfc
 import math
-from timessim.utils.compute_distance_m import compute_distance_m
-from timessim.utils.check_phy_success import check_phy_success_ber
+from multi_hop_industrial_simulator.utils.compute_distance_m import compute_distance_m
+from multi_hop_industrial_simulator.utils.check_phy_success import check_phy_success_ber
 
-from timessim.channel_models.THz_channel import THzChannel
-from timessim.network.bs import BS
+from multi_hop_industrial_simulator.channel_models.THz_channel import THzChannel
+from multi_hop_industrial_simulator.network.bs import BS
 
 # Function to check if a UE's transmission has collided
 def check_collision(input_simulator_timing_structure: dict, input_t_start_rx: int, input_t_end_rx: int,

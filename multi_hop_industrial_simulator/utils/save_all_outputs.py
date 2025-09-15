@@ -12,7 +12,7 @@ def save_all_outputs(inputs: dict, file_name: str):
     hour = current_date.hour
     minute = current_date.minute
     second = current_date.second
-    path = "timessim/results/" + f'{year}_{month:02d}_{day:02d}_{hour}_{minute}_{second}_' + file_name
+    path = "multi_hop_industrial_simulator/results/" + f'{year}_{month:02d}_{day:02d}_{hour}_{minute}_{second}_' + file_name
 
     for metric in inputs.keys():
         inputs[metric]= inputs[metric].tolist()

@@ -1,6 +1,6 @@
 import operator
 
-from timessim.network.packet import Packet
+from multi_hop_industrial_simulator.network.packet import Packet
 
 
 class UeBuffer:

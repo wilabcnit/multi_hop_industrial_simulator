@@ -5,11 +5,11 @@ from typing import List
 import matplotlib.pyplot as plt
 import numpy as np
 
-from timessim.env.machine import Machine
-from timessim.network.bs import BS
-from timessim.network.ris import RIS
-from timessim.network.ue import Ue
-from timessim.env.distribution import Distribution
+from multi_hop_industrial_simulator.env.machine import Machine
+from multi_hop_industrial_simulator.network.bs import BS
+from multi_hop_industrial_simulator.network.ris import RIS
+from multi_hop_industrial_simulator.network.ue import Ue
+from multi_hop_industrial_simulator.env.distribution import Distribution
 
 font_dict = {'label_size': 22,
              'ticks_size': 22,

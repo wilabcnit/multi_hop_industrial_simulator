@@ -1,7 +1,7 @@
 from pandas import DataFrame
 
-from timessim.network.bs import BS
-from timessim.network.ue import Ue
+from multi_hop_industrial_simulator.network.bs import BS
+from multi_hop_industrial_simulator.network.ue import Ue
 from typing import List
 import sys
 import math
