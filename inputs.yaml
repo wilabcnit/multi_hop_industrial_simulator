@@ -1,0 +1,202 @@
+# To select a given traffic, please choose among the following numbers:
+#    1 : RT Node
+#    2 : Camera Node
+#    3 : NRT Node
+
+# Note: 'type' refers to the type of traffic generated -> 1-RT, 2-Camera, 3-NRT
+
+traffic_rt : # RT Node
+    type : 1
+    isochronous: 0         # 0: NON-isochronous, 1: isochronous
+    period : 0.003         # [s] If isochoronous: [0.0001 - 0.002] s; NON-isochronous: [0.002 - 0.02] s
+    sensor_type: 0         # 0: low-end, 1: high-end
+    payload: 30            # [B] If sensor-type: 0 -> [30-100] bytes; sensor-type: 1 -> [50-1500] bytes
+    kpi_latency: 1000      # ms
+    kpi_reliability: 99.999 # %
+    percentage_of_ue : 0
+
+traffic_cn : # Camera Node
+    type : 2
+    camera_type: 0         # 0: slow-motion, 1: standard-camera
+    period : 0.0083        # [s] if slow-motion: 1/120 s (0.0083 s); if standard: 1/30 s (0.0333 s)
+    resolution_type: 0     # 0 low-end, 1 medium, 2 high-end
+    payload: 10000000      # [B]        If resolution-type: 0 -> [2-12] Mbytes; resolution-type: 1 -> [12-45] Mbytes, resolution-type: 2 -> [45-200] Mbytes
+    kpi_latency: 1000      # [ms]
+    kpi_reliability: 99.999 # %
+    percentage_of_ue : 0
+
+traffic_nrt : # NRT Node for data collection (exchange of data)
+    type : 3
+    collection_on: True # decide which is the initial state for NRT node -> ON, Standby or Optimization
+    collection_standby: False
+    optimization: False
+    collection_on_duration: 0.1 # [s]
+    collection_standby_duration: 0.05 # [s]
+    optimization_duration: 0.15 # [s]
+
+    data_collection:
+        period: 0.005         # [s] -> Chose btw [0.001 - 0.1] s
+        payload_on: 200       # [B] -> Chose btw [100 - 1500] bytes
+        payload_standby: 40   # [B] -> Chose btw [30 - 100] bytes
+
+    machine_optimization:    # during machine_optimization the node is in RX -> it is the BS that sends data
+        scale: 0.01           # [s]; scale = 1/lambda -> chose btw [0.01 and 1] s -> Exp(lambda)
+        payload: 150         # [B], chose btw [100 - 300] bytes
+
+    kpi_latency: 1000         # [ms]
+    kpi_reliability: 99.999   # %
+    percentage_of_ue : 0
+
+traffic_fq:
+    type : 4
+    payload : 20  # B
+    overhead_data: 10 # B # TODO CHECK IF THERE IS A REFERENCE FOR THIS OVERHEAD
+    percentage_of_ue : 100
+
+radio :
+    carrier_frequency_ghz : 300 # Central carrier [GHz]
+    bandwidth_ghz : 15   # Overall bandwidth used by gNB [GHz]
+    bit_rate_gbits : 30      # bit rate = B*log_2(M) -> M = 64 -> log_2(M) = 6
+    modulation_order: 4  # 64-QAM modulation
+
+channel:
+    input_file_name: './timessim/channel_models/molecular_absorption_coefficients.xlsx'
+    input_sheet_name: 'Values'
+    input_column_names: ['Carrier frequency [Hz]', 'Molecular absorption coefficient [m^-1]']
+    path_loss_exponent: 2
+    snr_th_db: 10  # SNR threshold [dB]
+    sir_th_db: 10 # SIR threshold [dB]
+    sinr_th_db: 10 # SINR threshold [dB]
+    noise_temperature: 290  # [K]
+    nlos_absorption_loss_db: 20  # [dB]
+    shadowing_std_dev_db: 4  # [dB]
+    shadowing_coherence_time_ms: 0.01  # [ms] # 0.01
+    fading_param: 1
+    apply_fading: False  # Either "True" or "False"
+    antenna_gain_model: 'input'  # Either 'input', i.e., value taken from ue&bs structure (below), or 'kumar salvia'
+    use_huawei_measurements: True
+    p_succ_phy: 0.9
+
+core_network:
+    delay_ms : 0.1 # Delay from gNB to a server in the core network (C/M)
+
+geometry :
+    machine_size : 2
+    inter_machine_distance : 5
+
+ue:
+    ue_spatial_distribution: 'Grid' #'Custom' #'Uniform' #Custom' #'Uniform' # "Custom" # 'Grid': UEs over the grid
+    ue_starting_state: "IDLE"
+    max_buffer_size: 10000000000000000  # [B]
+    ue_transmit_power_dbm: 30  # [dBm]
+    ue_gain_db: 5 # 8 conference; 6 Journal  # Used only if channel.antenna_gain_model = 'input'
+    ue_number_of_antennas : 1  # Used only if channel.antenna_gain_model = 'kumar salvia'
+    ue_noise_figure_db: 5 # 9 conference; 8 Journal
+    ue_antenna_efficiency: 1
+
+bs:
+    number_of_bs : 1
+    bs_starting_state: "RX"
+    bs_transmit_power_dbm: 35  # [dBm]
+    bs_gain_db: 10 # 10 conference; 9 Journal  # Used only if channel.antenna_gain_model = 'input'
+    bs_number_of_antennas: 25  # Used only if channel.antenna_gain_model = 'kumar salvia'
+    bs_antenna_efficiency: 1
+    bs_noise_figure_db: 4 # 8 conference; 4 Journal
+
+ris:
+    ris_spatial_distribution: "Uniform"  # TODO: Optimal deployment of RIS
+    ris_size: 2 # [m]
+    number_of_ris: 0
+    num_configurations: 3
+    config_dimension: 2
+    processing_delay: 100  # [µs]
+
+scenario:
+    name: 'grid'  # Choose from {'birex', 'aetna', 'custom', 'aetna_wcnc', 'aetna_deliverable', 'grid'}
+    input_file_name: 'input_scenario_grid.xlsx'
+    input_sheet_names: {
+                           'birex' : 'bi-rex_layout',
+                           'aetna' : 'aetna_layout',
+                           'aetna_wcnc': 'aetna_layout_WCNC',
+                           'aetna_eucnc': 'aetna_layout_EUCNC',
+                           'aetna_deliverable': 'aetna_layout_deliverable_TIMES',
+                           'huawei' : 'huawei_layout',
+                           'custom' : 'custom_layout',
+                           'grid': 'grid_layout'
+    }
+    machine_type: 'full'  # full if the radio link within a machine is considered as NLoS, empty otherwise
+
+aloha_protocol:
+    ack_size_bytes: 10  # [B]
+    contention_window_int: 5
+    max_n_retx_per_packet: 3
+    max_n_packets_to_be_forwarded: 4
+    hop_limit: 4
+
+# High-Level simulation parameters
+simulation:
+    tot_simulation_time_s: 0.00005 # s
+    n_simulations : 1
+    initial_number_of_ues : 12
+    step_number_of_ues : 6
+    final_number_of_ues : 12
+    initial_seed: 18
+    final_seed: 18
+    seed: 18
+    enable_print: False  # True to obtain useful prints for debugging purposes
+    star_topology: False # True if star topology, False if mesh topology
+    mobility_obstacle: False
+    mobility_step_size: 2.25 # needed 2.25 for mobility_spawn True
+    mobility_spawn: False
+    mobility_shuffle: False
+    mobility_changes: 3
+
+power_consumed_ue:
+    idle: 0.0001 # 0.0001 #0.1 mW
+    backoff: 0.0005 # 0.0001 # 0.1 mW
+    propagation_data : 0
+    propagation_ack : 0
+    tx_data: 0.001 # 0.001
+    wait_ack: 0.0005 # 0.0005 #0.5 mW
+    low_power: 0.05 #0.05
+
+power_consumed_bs:
+    rx: 0.5
+    tx_ack: 1 #0.5
+
+rl:
+    router:
+        alfa_uni_ack : 1
+        alfa_uni_no_ack : 0.6
+        alfa_broad_change : 0.7
+        alfa_broad_no_change : 0. #(minimum = 0.5 to keep the reward between 1 and 0)
+        energy_factor : 0.1
+        TTL : 12
+        contention_window_int_init: 13
+        contention_window_int_min: 5
+        contention_window_int_max: 20
+        max_n_packets_to_be_forwarded_init: 12
+        max_n_packets_to_be_forwarded_min: 4
+        max_n_packets_to_be_forwarded_max: 19
+
+    agent:
+        n_actions : 3  # 3 for Q and W; 2 for unicast/broadcast
+        max_len_replay_buffer : 15000
+        learning_rate : 0.01
+        batch_size : 256
+        discount_factor : 0.95
+        n_episodes : 60
+        n_steps : 60
+        n_simulations_for_training : 5 #50
+        best_score : 0
+        DDQN: True
+        3DQN: False
+        Rainbow_DQN: False
+        New_state: True
+        DRL_nodes_number: 4
+        DRL_type_state: 2
+        number_of_tx_data_per_step: 3
+        goal_oriented: 'S' # 'S' for throughput, 'L' for latency, 'S%L' for throughput and latency
+        normalized_S: True # True if the throughput in the RL state is normalized, False otherwise
+        skip_config: True # True if the RL agent skips the configuration to compute the metrics, False otherwise
+        skip_config_portion_time: 6 # it means that the first 1/skip_config_portion_time of the simulation time is skipped for the metrics computation
