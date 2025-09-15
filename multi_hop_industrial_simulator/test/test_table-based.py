@@ -24,7 +24,6 @@ from multi_hop_industrial_simulator.utils.compute_simulation_outputs import comp
 from multi_hop_industrial_simulator.utils.compute_snr_threshold import compute_snr_threshold_db
 
 from multi_hop_industrial_simulator.utils.instantiate_bs import instantiate_bs
-from multi_hop_industrial_simulator.utils.instantiate_ris import instantiate_ris
 from multi_hop_industrial_simulator.utils.read_input_file import read_input_file
 from multi_hop_industrial_simulator.utils.read_inputs import read_inputs
 from multi_hop_industrial_simulator.env.geometry import Geometry
@@ -35,14 +34,10 @@ from multi_hop_industrial_simulator.utils.compute_simulator_tick_duration import
 from multi_hop_industrial_simulator.channel_models.THz_channel import THzChannel
 from multi_hop_industrial_simulator.utils.check_for_neighbours import check_for_neighbours
 
-from multi_hop_industrial_simulator.utils.set_ues_los_condition_vecchio import set_ues_los_condition_ue_bs, \
-    set_ues_los_condition_ue_ue, set_ues_los_condition_ue_bs_unif, set_ues_los_condition_ue_ue_unif
-from multi_hop_industrial_simulator.utils.set_ues_los_condition import set_ues_los_condition_new
+from multi_hop_industrial_simulator.utils.set_ues_los_condition import set_ues_los_condition
 
 from collections import deque
 
-from multi_hop_industrial_simulator.utils.utils_for_tb_ualoha_with_dqn import get_max_index
-from multi_hop_industrial_simulator.utils.plot_rewards_per_n_ue import plot_rewards_per_n_ue, plot_actions_per_n_ue
 from multi_hop_industrial_simulator.utils.choose_next_action import choose_next_action_tb_no_RL
 
 import gc
@@ -398,7 +393,6 @@ scenario_file_name = inputs.get('scenario').get('input_file_name')
 initial_seed = inputs.get('simulation').get('initial_seed')
 final_seed = inputs.get('simulation').get('final_seed')
 ue_distribution_type = inputs.get('ue').get('ue_spatial_distribution')
-ris_distribution_type = inputs.get('ris').get('ris_spatial_distribution')
 ue_distribution = inputs.get('ue').get('ue_spatial_distribution')
 initial_number_of_ues = inputs.get('simulation').get('initial_number_of_ues')
 step_number_of_ues = inputs.get('simulation').get('step_number_of_ues')
@@ -408,8 +402,6 @@ ue_starting_state = inputs.get('ue').get('ue_starting_state')
 bs_starting_state = inputs.get('bs').get('bs_starting_state')
 payload = inputs.get('traffic_rt').get('payload')
 period = inputs.get('traffic_rt').get('period')
-ris_distribution = inputs.get('ris').get('ris_spatial_distribution')
-n_ris = inputs.get('ris').get('number_of_ris')
 on_collection_nrt_s = inputs.get('traffic_nrt').get('collection_on_duration')
 standby_collection_nrt_s = inputs.get('traffic_nrt').get('collection_standby_duration')
 optimization_nrt_s = inputs.get('traffic_nrt').get('optimization_duration')
@@ -476,7 +468,7 @@ mac_success = False  # True if a transmission is successful at MAC layer, False 
 output_dict = {}  # Dictionary where keys are the metrics to be computed and the values contain the corresponding output
 # for each UE in the form (N x M), where N is the number of times we loop over a different number of UEs
 # and M is the number of simulations
-output_keys = ["p_mac", "s_ue", "s", "l", "e", "j_index",  "Discarded_packets_full_queue_percentage", "Discarded_packets_max_rtx_percentage"]
+output_keys = ["p_mac", "s_ue", "s", "l", "e", "j_index"]
 
 # Loop over the output keys and initialize matrices for each key
 n_simulated_ues = abs((final_number_of_ues - initial_number_of_ues) // step_number_of_ues) + 1
@@ -496,7 +488,7 @@ for output_key in output_keys:
 
 
 # Pick up input scenario
-if scenario_name in ['birex', 'aetna', 'custom', 'aetna_wcnc', 'aetna_deliverable', 'grid']:
+if scenario_name in ['grid']:
     scenario_sheet_name = inputs.get('scenario').get('input_sheet_names').get(scenario_name)
     scenario_df = read_input_file(file_name=scenario_file_name, sheet_name=scenario_sheet_name, reset_index=True)
 else:
@@ -507,11 +499,9 @@ geometry_class = Geometry(scenario_df=scenario_df)
 
 # Initialize distribution environment
 distribution_class = Distribution(ue_distribution_type=ue_distribution_type,
-                                  ris_distribution_type=ris_distribution_type,
                                   machine_distribution_type=scenario_name,
                                   scenario_df=scenario_df,
-                                  tot_number_of_ues=initial_number_of_ues,
-                                  tot_number_of_ris=n_ris)
+                                  tot_number_of_ues=initial_number_of_ues)
 
 # Distribute machines
 machine_array = distribution_class.distribute_machines(scenario_df=scenario_df)
@@ -529,9 +519,6 @@ if len(machine_array) > 0:
 
 # Compute the tick duration
 simulator_tick_duration_s = compute_simulator_tick_duration(input_params_dict=inputs)
-
-# Instantiate the RISs
-ris_array = instantiate_ris(input_params_dict=inputs)
 
 # Instantiate the BS
 bs = instantiate_bs(input_params_dict=inputs, simulator_tick_duration=simulator_tick_duration_s,
@@ -633,15 +620,19 @@ for seed in range(initial_seed, final_seed + 1):
         # Set UE LoS/NLoS condition
         if ue_distribution_type != "Grid":
 
-            if ue_distribution_type == "Custom":
-                set_ues_los_condition_ue_bs(ue_array=ue_array, bs=bs, machine_array=machine_array)
+            for i in range(0, len(ue_array)):
+                ue_array[i].is_in_los = set_ues_los_condition(ue=ue_array[i], bs=bs, machine_array=machine_array,
+                                                                  link='ue_bs')
+
+            for j in range(0, len(ue_array)):
                 for i in range(0, len(ue_array)):
-                    set_ues_los_condition_ue_ue(ue_array=ue_array, bs=ue_array[i], machine_array=machine_array,
-                                                machine_kind=machine_type)
-            elif ue_distribution_type == "Uniform":
-                set_ues_los_condition_ue_bs_unif(ue_array=ue_array, bs=bs, machine_array=machine_array)
-                for i in range(0, len(ue_array)):
-                    set_ues_los_condition_ue_ue_unif(ue_array=ue_array, bs=ue_array[i], machine_array=machine_array)
+                    los_condition = set_ues_los_condition(ue=ue_array[j], bs=ue_array[i],
+                                                              machine_array=machine_array,
+                                                              link='ue_ue')
+                    ue_array[j].is_in_los_ues.append(los_condition)
+
+            # Method to ensure that in case of UEs' Uniform distribution they can have at least one neighbour
+            # to reach the BS
 
             check_for_neighbours(ue_array=ue_array, machine_array=machine_array, bs=bs,
                                  input_snr_threshold_db=snr_th_db,
@@ -651,27 +642,18 @@ for seed in range(initial_seed, final_seed + 1):
                                  antenna_gain_model=antenna_gain_model, use_huawei_measurements=use_huawei_measurements,
                                  input_average_clutter_height_m=average_machine_height_m)
 
-            if ue_distribution_type == "Custom":
-                set_ues_los_condition_ue_bs(ue_array=ue_array, bs=bs, machine_array=machine_array)
-                for i in range(0, len(ue_array)):
-                    set_ues_los_condition_ue_ue(ue_array=ue_array, bs=ue_array[i], machine_array=machine_array,
-                                                machine_kind=machine_type)
-            elif ue_distribution_type == "Uniform":
-                set_ues_los_condition_ue_bs_unif(ue_array=ue_array, bs=bs, machine_array=machine_array)
-                for i in range(0, len(ue_array)):
-                    set_ues_los_condition_ue_ue_unif(ue_array=ue_array, bs=ue_array[i], machine_array=machine_array)
-
             compute_propagation_delays(ue_array=ue_array, bs=bs,
                                        input_simulator_tick_duration_s=simulator_tick_duration_s)
 
         else:
+
             for i in range(0, len(ue_array)):
-                ue_array[i].is_in_los = set_ues_los_condition_new(ue=ue_array[i], bs=bs, machine_array=machine_array,
+                ue_array[i].is_in_los = set_ues_los_condition(ue=ue_array[i], bs=bs, machine_array=machine_array,
                                                                   link='ue_bs')
 
             for j in range(0, len(ue_array)):
                 for i in range(0, len(ue_array)):
-                    los_condition = set_ues_los_condition_new(ue=ue_array[j], bs=ue_array[i], machine_array=machine_array,
+                    los_condition = set_ues_los_condition(ue=ue_array[j], bs=ue_array[i], machine_array=machine_array,
                                                   link='ue_ue')
                     ue_array[j].is_in_los_ues.append(los_condition)
 
@@ -725,7 +707,6 @@ for seed in range(initial_seed, final_seed + 1):
             bs.rx_data = False
             bs.id_ues_data_rx = list()
             for ue in ue_array:
-                ue.set_n_data_discarded(input_n_data_discarded=0)
                 ue.set_n_data_tx(input_n_data_tx=0)
                 ue.set_n_data_rx(input_n_data_rx=0)
                 ue.set_state(input_state=ue_starting_state)
@@ -779,11 +760,8 @@ for seed in range(initial_seed, final_seed + 1):
                 ue.ues_colliding_at_ue = list()
                 ue.data_rx_at_ue_ue_id_list = list()
                 ue.latency_ue = list()
-                ue.discarded_packets = 0
 
                 ue.n_generated_packets = 0
-                ue.packets_discarded_full_queue = 0
-                ue.packets_discarded_max_rtx = 0
 
                 ue.forward_in_bo = False
                 ue.packet_forward = False
@@ -851,27 +829,25 @@ for seed in range(initial_seed, final_seed + 1):
             """
 
             # Code to plot the factory in 2D or 3D
-            # plot_factory(factory_length=geometry_class.get_factory_length(),
-            #              factory_width=geometry_class.get_factory_width(),
-            #              factory_height=geometry_class.get_factory_height(),
-            #              machine_list=machine_array,
-            #              ue_list=ue_array,
-            #              ris_list=ris_array,
-            #              bs=bs,
-            #              distribution_class=distribution_class,
-            #              scenario_name=scenario_name,
-            #              save_file=f'./multi_hop_industrial_simulator/results/plot_{scenario_name}_scenario_3d.png')
-            # plot_scenario_2d(factory_length=geometry_class.get_factory_length(),
-            #                  factory_width=geometry_class.get_factory_width(),
-            #                  factory_height=geometry_class.get_factory_height(),
-            #                  machine_list=machine_array,
-            #                  ue_list=ue_array,
-            #                  ris_list=ris_array,
-            #                  bs=bs,
-            #                  distribution_class=distribution_class,
-            #                  scenario_name=scenario_name,
-            #                  save_file=f'./multi_hop_industrial_simulator/results/plot_{scenario_name}_scenario_2d.png',
-            #                  )
+            plot_factory(factory_length=geometry_class.get_factory_length(),
+                         factory_width=geometry_class.get_factory_width(),
+                         factory_height=geometry_class.get_factory_height(),
+                         machine_list=machine_array,
+                         ue_list=ue_array,
+                         bs=bs,
+                         distribution_class=distribution_class,
+                         scenario_name=scenario_name,
+                         save_file=f'./multi_hop_industrial_simulator/results/plot_{scenario_name}_scenario_3d.png')
+            plot_scenario_2d(factory_length=geometry_class.get_factory_length(),
+                             factory_width=geometry_class.get_factory_width(),
+                             factory_height=geometry_class.get_factory_height(),
+                             machine_list=machine_array,
+                             ue_list=ue_array,
+                             bs=bs,
+                             distribution_class=distribution_class,
+                             scenario_name=scenario_name,
+                             save_file=f'./multi_hop_industrial_simulator/results/plot_{scenario_name}_scenario_2d.png',
+                             )
 
             t_change = 0
             next_t_change = 0
@@ -1113,7 +1089,6 @@ for seed in range(initial_seed, final_seed + 1):
                     #                  factory_height=geometry_class.get_factory_height(),
                     #                  machine_list=machine_array,
                     #                  ue_list=ue_array,
-                    #                  ris_list=ris_array,
                     #                  bs=bs,
                     #                  distribution_class=distribution_class,
                     #                  scenario_name=scenario_name,
@@ -1123,100 +1098,61 @@ for seed in range(initial_seed, final_seed + 1):
                         ue_array[i].is_in_los_ues.clear()
 
                     # Update UE LoS/NLoS condition after the movement
-                    if ue_distribution_type != "Grid":
 
-                        if ue_distribution_type == "Custom":
-                            set_ues_los_condition_ue_bs(ue_array=ue_array, bs=bs, machine_array=machine_array)
-                            for i in range(0, len(ue_array)):
-                                set_ues_los_condition_ue_ue(ue_array=ue_array, bs=ue_array[i],
-                                                            machine_array=machine_array,
-                                                            machine_kind=machine_type)
-                        elif ue_distribution_type == "Uniform":
-                            set_ues_los_condition_ue_bs_unif(ue_array=ue_array, bs=bs, machine_array=machine_array)
-                            for i in range(0, len(ue_array)):
-                                set_ues_los_condition_ue_ue_unif(ue_array=ue_array, bs=ue_array[i],
-                                                                 machine_array=machine_array)
-
-                        check_for_neighbours(ue_array=ue_array, machine_array=machine_array, bs=bs,
-                                             input_snr_threshold_db=snr_th_db,
-                                             input_shadowing_sample_index=0, input_thz_channel=thz_channel,
-                                             input_carrier_frequency_ghz=carrier_frequency_ghz,
-                                             input_bandwidth_hz=bandwidth_hz,
-                                             input_apply_fading=apply_fading, input_clutter_density=clutter_density,
-                                             antenna_gain_model=antenna_gain_model,
-                                             use_huawei_measurements=use_huawei_measurements,
-                                             input_average_clutter_height_m=average_machine_height_m)
-
-                        if ue_distribution_type == "Custom":
-                            set_ues_los_condition_ue_bs(ue_array=ue_array, bs=bs, machine_array=machine_array)
-                            for i in range(0, len(ue_array)):
-                                set_ues_los_condition_ue_ue(ue_array=ue_array, bs=ue_array[i],
-                                                            machine_array=machine_array,
-                                                            machine_kind=machine_type)
-                        elif ue_distribution_type == "Uniform":
-                            set_ues_los_condition_ue_bs_unif(ue_array=ue_array, bs=bs, machine_array=machine_array)
-                            for i in range(0, len(ue_array)):
-                                set_ues_los_condition_ue_ue_unif(ue_array=ue_array, bs=ue_array[i],
-                                                                 machine_array=machine_array)
-
-                        compute_propagation_delays(ue_array=ue_array, bs=bs,
-                                                   input_simulator_tick_duration_s=simulator_tick_duration_s)
-
-                    else:
-                        for i in range(0, len(ue_array)):
-                            ue_array[i].is_in_los = set_ues_los_condition_new(ue=ue_array[i], bs=bs,
-                                                                              machine_array=machine_array,
-                                                                              link='ue_bs')
-
-                        for j in range(0, len(ue_array)):
-                            for i in range(0, len(ue_array)):
-                                los_condition = set_ues_los_condition_new(ue=ue_array[j], bs=ue_array[i],
+                    for i in range(0, len(ue_array)):
+                        ue_array[i].is_in_los = set_ues_los_condition(ue=ue_array[i], bs=bs,
                                                                           machine_array=machine_array,
-                                                                          link='ue_ue')
-                                ue_array[j].is_in_los_ues.append(los_condition)
+                                                                          link='ue_bs')
 
-                        for ue in ue_array:
-                            tx_rx_distance_m = compute_distance_m(tx=ue, rx=bs)
-                            shadowing_sample_index = 0
-                            snr_db = thz_channel.get_3gpp_snr_db(
-                                tx=ue, rx=bs,
-                                carrier_frequency_ghz=carrier_frequency_ghz,
-                                tx_rx_distance_m=tx_rx_distance_m,
-                                apply_fading=apply_fading,
-                                bandwidth_hz=bandwidth_hz,
-                                clutter_density=clutter_density,
-                                input_shadowing_sample_index=shadowing_sample_index,
-                                antenna_gain_model=antenna_gain_model,
-                                use_huawei_measurements=use_huawei_measurements,
-                                input_average_clutter_height_m=average_machine_height_m,
-                                los_cond='bs_ue')
-                            if snr_db > sinr_th_db:
-                                success = True
-                            else:
-                                success = False
+                    for j in range(0, len(ue_array)):
+                        for i in range(0, len(ue_array)):
+                            los_condition = set_ues_los_condition(ue=ue_array[j], bs=ue_array[i],
+                                                                      machine_array=machine_array,
+                                                                      link='ue_ue')
+                            ue_array[j].is_in_los_ues.append(los_condition)
 
-                        for ue in ue_array:
-                            for other_ue in ue_array:
-                                if other_ue != ue:
-                                    tx_rx_distance_m = compute_distance_m(tx=ue, rx=other_ue)
+                    for ue in ue_array:
+                        tx_rx_distance_m = compute_distance_m(tx=ue, rx=bs)
+                        shadowing_sample_index = 0
+                        snr_db = thz_channel.get_3gpp_snr_db(
+                            tx=ue, rx=bs,
+                            carrier_frequency_ghz=carrier_frequency_ghz,
+                            tx_rx_distance_m=tx_rx_distance_m,
+                            apply_fading=apply_fading,
+                            bandwidth_hz=bandwidth_hz,
+                            clutter_density=clutter_density,
+                            input_shadowing_sample_index=shadowing_sample_index,
+                            antenna_gain_model=antenna_gain_model,
+                            use_huawei_measurements=use_huawei_measurements,
+                            input_average_clutter_height_m=average_machine_height_m,
+                            los_cond='bs_ue')
+                        if snr_db > sinr_th_db:
+                            success = True
+                        else:
+                            success = False
 
-                                    shadowing_sample_index = 0
-                                    snr_db = thz_channel.get_3gpp_snr_db(
-                                        tx=ue, rx=other_ue,
-                                        carrier_frequency_ghz=carrier_frequency_ghz,
-                                        tx_rx_distance_m=tx_rx_distance_m,
-                                        apply_fading=apply_fading,
-                                        bandwidth_hz=bandwidth_hz,
-                                        clutter_density=clutter_density,
-                                        input_shadowing_sample_index=shadowing_sample_index,
-                                        antenna_gain_model=antenna_gain_model,
-                                        use_huawei_measurements=use_huawei_measurements,
-                                        input_average_clutter_height_m=average_machine_height_m,
-                                        los_cond='ue_ue')
-                                    if snr_db > sinr_th_db:
-                                        success = True
-                                    else:
-                                        success = False
+                    for ue in ue_array:
+                        for other_ue in ue_array:
+                            if other_ue != ue:
+                                tx_rx_distance_m = compute_distance_m(tx=ue, rx=other_ue)
+
+                                shadowing_sample_index = 0
+                                snr_db = thz_channel.get_3gpp_snr_db(
+                                    tx=ue, rx=other_ue,
+                                    carrier_frequency_ghz=carrier_frequency_ghz,
+                                    tx_rx_distance_m=tx_rx_distance_m,
+                                    apply_fading=apply_fading,
+                                    bandwidth_hz=bandwidth_hz,
+                                    clutter_density=clutter_density,
+                                    input_shadowing_sample_index=shadowing_sample_index,
+                                    antenna_gain_model=antenna_gain_model,
+                                    use_huawei_measurements=use_huawei_measurements,
+                                    input_average_clutter_height_m=average_machine_height_m,
+                                    los_cond='ue_ue')
+                                if snr_db > sinr_th_db:
+                                    success = True
+                                else:
+                                    success = False
 
                     if mobility_shuffle: # Update propagation delays
                         compute_propagation_delays(ue_array=ue_array, bs=bs,
@@ -2094,12 +2030,7 @@ for seed in range(initial_seed, final_seed + 1):
                                                 # Remain in BO until the end
                                                 ue.set_state_duration(input_ticks=ue.get_state_final_tick())
                                         else:
-                                            if success and ((len(ue.ul_buffer.buffer_packet_list) == \
-                                                          max_n_packets_to_be_forwarded + 1 and ue.check_generated_packet_present() is True) \
-                                                         or (
-                                                             (len(ue.ul_buffer.buffer_packet_list) == \
-                                                              max_n_packets_to_be_forwarded and ue.check_generated_packet_present() is False))):
-                                                ue.packets_discarded_full_queue += 1
+
                                             # Remain in BO until the end
                                             ue.set_state_duration(input_ticks=ue.get_state_final_tick())
                                         if len(simulator_timing_structure[f'UE_{ue.get_ue_id()}']['DATA_RX'][
@@ -3232,12 +3163,6 @@ for seed in range(initial_seed, final_seed + 1):
 
 
                                         else:
-                                            if success and ((len(ue.ul_buffer.buffer_packet_list) == \
-                                                          max_n_packets_to_be_forwarded + 1 and ue.check_generated_packet_present() is True) \
-                                                         or (
-                                                             (len(ue.ul_buffer.buffer_packet_list) == \
-                                                              max_n_packets_to_be_forwarded and ue.check_generated_packet_present() is False))):
-                                                ue.packets_discarded_full_queue += 1
 
                                             remain_in_wait_ack = True
                                         if len(simulator_timing_structure[f'UE_{ue.get_ue_id()}']['DATA_RX'][
@@ -4253,11 +4178,6 @@ for seed in range(initial_seed, final_seed + 1):
             if enable_print:
                 print("Simulation ended at t = ", tot_simulation_time_tick)
 
-            for ue_index_inner, ue_inner in enumerate(ue_array):
-                output_dict["Discarded_packets_full_queue_percentage"][f"N={n_ue}"][f"Sim={n_simulation}"][ue_index_inner] = ue_inner.packets_discarded_full_queue / ue_inner.n_generated_packets * 100
-                output_dict["Discarded_packets_max_rtx_percentage"][f"N={n_ue}"][f"Sim={n_simulation}"][ue_index_inner] = ue_inner.packets_discarded_max_rtx / ue_inner.n_generated_packets * 100
-                print("UE ", ue_inner.get_ue_id(), " has discarded with full queue", ue_inner.packets_discarded_full_queue, " and has generated", ue_inner.n_generated_packets, "packets")
-                print("UE ", ue_inner.get_ue_id(), " has discarded with max rtx", ue_inner.packets_discarded_max_rtx, " and has generated", ue_inner.n_generated_packets, "packets")
 
             compute_simulator_outputs(ue_array=ue_array, bs=bs, simulation_time_s=simulation_time_s, inputs_dict=inputs,
                                       output_dict=output_dict,
@@ -4304,8 +4224,6 @@ print("S_net: ", averaged_data['s'])
 print("Latency: ", averaged_data['l'])
 print("Energy: ", averaged_data['e'])
 print("Jain Index: ", averaged_data['j_index'])
-print("Discarded_packet_full_queue: ", averaged_data['Discarded_packets_full_queue_percentage'])
-print("Discarded_packets_max_rtx: ", averaged_data['Discarded_packets_max_rtx_percentage'])
 
 averaged_ticks_BO = 0
 BO_instances= 0
@@ -4348,9 +4266,9 @@ current_date = datetime.now()
 year = current_date.year
 month = current_date.month
 day = current_date.day
-final_file_name_output_1 = 'multi_hop_industrial_simulator/results/' + f'{year}_{month:02d}_{day:02d}_' + 'TB_output_dict' + '_final_UEs_' + str(final_number_of_ues) + '_Payload_' + str(payload_fq)+ '_contention_window_' + str(contention_window_int) + '_buffer_size_' + str(max_n_packets_to_be_forwarded) + '_TTL_' + str(TTL) + 'discarded_pck' + '.txt'
-final_file_name_output_2 = 'multi_hop_industrial_simulator/results/' + f'{year}_{month:02d}_{day:02d}_' + 'TB_averaged_data' + '_final_UEs_' + str(final_number_of_ues) +'_Payload_' + str(payload_fq)+ '_contention_window_' + str(contention_window_int) + '_buffer_size_' + str(max_n_packets_to_be_forwarded) + '_TTL_' + str(TTL) + 'discarded_pck' + '.txt'
-final_file_name_output_3 = 'multi_hop_industrial_simulator/results/' + f'{year}_{month:02d}_{day:02d}_' + 'TB_inputs' + '_final_UEs_' + str(final_number_of_ues) + '_Payload_' + str(payload_fq)+ '_contention_window_' + str(contention_window_int) + '_buffer_size_' + str(max_n_packets_to_be_forwarded) + '_TTL_' + str(TTL) + 'discarded_pck' + '.txt'
+final_file_name_output_1 = 'multi_hop_industrial_simulator/results/' + f'{year}_{month:02d}_{day:02d}_' + 'TB_output_dict' + '_final_UEs_' + str(final_number_of_ues) + '_Payload_' + str(payload_fq)+ '_contention_window_' + str(contention_window_int) + '_buffer_size_' + str(max_n_packets_to_be_forwarded) + '_TTL_' + str(TTL) + '.txt'
+final_file_name_output_2 = 'multi_hop_industrial_simulator/results/' + f'{year}_{month:02d}_{day:02d}_' + 'TB_averaged_data' + '_final_UEs_' + str(final_number_of_ues) +'_Payload_' + str(payload_fq)+ '_contention_window_' + str(contention_window_int) + '_buffer_size_' + str(max_n_packets_to_be_forwarded) + '_TTL_' + str(TTL) + '.txt'
+final_file_name_output_3 = 'multi_hop_industrial_simulator/results/' + f'{year}_{month:02d}_{day:02d}_' + 'TB_inputs' + '_final_UEs_' + str(final_number_of_ues) + '_Payload_' + str(payload_fq)+ '_contention_window_' + str(contention_window_int) + '_buffer_size_' + str(max_n_packets_to_be_forwarded) + '_TTL_' + str(TTL) + '.txt'
 
 # Plot and save simulation output
 with open(final_file_name_output_1, "w") as file:

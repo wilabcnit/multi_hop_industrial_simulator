@@ -24,7 +24,6 @@ from multi_hop_industrial_simulator.utils.compute_simulation_outputs import comp
 from multi_hop_industrial_simulator.utils.compute_snr_threshold import compute_snr_threshold_db
 
 from multi_hop_industrial_simulator.utils.instantiate_bs import instantiate_bs
-from multi_hop_industrial_simulator.utils.instantiate_ris import instantiate_ris
 
 from multi_hop_industrial_simulator.utils.read_input_file import read_input_file
 from multi_hop_industrial_simulator.utils.read_inputs import read_inputs
@@ -37,10 +36,7 @@ from multi_hop_industrial_simulator.channel_models.THz_channel import THzChannel
 
 from multi_hop_industrial_simulator.utils.check_for_neighbours import check_for_neighbours
 
-
-from multi_hop_industrial_simulator.utils.set_ues_los_condition_vecchio import set_ues_los_condition_ue_bs, \
-    set_ues_los_condition_ue_ue, set_ues_los_condition_ue_bs_unif, set_ues_los_condition_ue_ue_unif
-from multi_hop_industrial_simulator.utils.set_ues_los_condition import set_ues_los_condition_new
+from multi_hop_industrial_simulator.utils.set_ues_los_condition import set_ues_los_condition
 
 from multi_hop_industrial_simulator.utils.plot_data import plot_factory, plot_snr, plot_scenario_2d, write_data
 
@@ -593,7 +589,6 @@ scenario_file_name = inputs.get('scenario').get('input_file_name')
 initial_seed = inputs.get('simulation').get('initial_seed')
 final_seed = inputs.get('simulation').get('final_seed')
 ue_distribution_type = inputs.get('ue').get('ue_spatial_distribution')
-ris_distribution_type = inputs.get('ris').get('ris_spatial_distribution')
 ue_distribution = inputs.get('ue').get('ue_spatial_distribution')
 initial_number_of_ues = inputs.get('simulation').get('initial_number_of_ues')
 step_number_of_ues = inputs.get('simulation').get('step_number_of_ues')
@@ -603,8 +598,6 @@ ue_starting_state = inputs.get('ue').get('ue_starting_state')
 bs_starting_state = inputs.get('bs').get('bs_starting_state')
 payload = inputs.get('traffic_rt').get('payload')
 period = inputs.get('traffic_rt').get('period')
-ris_distribution = inputs.get('ris').get('ris_spatial_distribution')
-n_ris = inputs.get('ris').get('number_of_ris')
 on_collection_nrt_s = inputs.get('traffic_nrt').get('collection_on_duration')
 standby_collection_nrt_s = inputs.get('traffic_nrt').get('collection_standby_duration')
 optimization_nrt_s = inputs.get('traffic_nrt').get('optimization_duration')
@@ -694,7 +687,7 @@ for output_key in output_keys:
 
 
 # Pick up input scenario
-if scenario_name in ['birex', 'aetna', 'custom', 'aetna_wcnc', 'aetna_deliverable', 'grid']:
+if scenario_name in ['grid']:
     scenario_sheet_name = inputs.get('scenario').get('input_sheet_names').get(scenario_name)
     scenario_df = read_input_file(file_name=scenario_file_name, sheet_name=scenario_sheet_name, reset_index=True)
 else:
@@ -705,11 +698,9 @@ geometry_class = Geometry(scenario_df=scenario_df)
 
 # Initialize distribution environment
 distribution_class = Distribution(ue_distribution_type=ue_distribution_type,
-                                  ris_distribution_type=ris_distribution_type,
                                   machine_distribution_type=scenario_name,
                                   scenario_df=scenario_df,
-                                  tot_number_of_ues=initial_number_of_ues,
-                                  tot_number_of_ris=n_ris)
+                                  tot_number_of_ues=initial_number_of_ues)
 
 # Distribute machines
 machine_array = distribution_class.distribute_machines(scenario_df=scenario_df)
@@ -727,9 +718,6 @@ if len(machine_array) > 0:
 
 # Compute the tick duration
 simulator_tick_duration_s = compute_simulator_tick_duration(input_params_dict=inputs)
-
-# Instantiate the RISs
-ris_array = instantiate_ris(input_params_dict=inputs)
 
 # Instantiate the BS
 bs = instantiate_bs(input_params_dict=inputs, simulator_tick_duration=simulator_tick_duration_s,
@@ -833,17 +821,22 @@ for seed in range(initial_seed, final_seed + 1):
         print("The max propagation delay is", max_prop_delay_tick)
 
         # Set UE LoS/NLoS condition
+
         if ue_distribution_type != "Grid":
 
-            if ue_distribution_type == "Custom":
-                set_ues_los_condition_ue_bs(ue_array=ue_array, bs=bs, machine_array=machine_array)
+            for i in range(0, len(ue_array)):
+                ue_array[i].is_in_los = set_ues_los_condition(ue=ue_array[i], bs=bs, machine_array=machine_array,
+                                                                  link='ue_bs')
+
+            for j in range(0, len(ue_array)):
                 for i in range(0, len(ue_array)):
-                    set_ues_los_condition_ue_ue(ue_array=ue_array, bs=ue_array[i], machine_array=machine_array,
-                                                machine_kind=machine_type)
-            elif ue_distribution_type == "Uniform":
-                set_ues_los_condition_ue_bs_unif(ue_array=ue_array, bs=bs, machine_array=machine_array)
-                for i in range(0, len(ue_array)):
-                    set_ues_los_condition_ue_ue_unif(ue_array=ue_array, bs=ue_array[i], machine_array=machine_array)
+                    los_condition = set_ues_los_condition(ue=ue_array[j], bs=ue_array[i],
+                                                              machine_array=machine_array,
+                                                              link='ue_ue')
+                    ue_array[j].is_in_los_ues.append(los_condition)
+
+            # Method to ensure that in case of UEs' Uniform distribution they can have at least one neighbour
+            # to reach the BS
 
             check_for_neighbours(ue_array=ue_array, machine_array=machine_array, bs=bs,
                                  input_snr_threshold_db=snr_th_db,
@@ -853,20 +846,11 @@ for seed in range(initial_seed, final_seed + 1):
                                  antenna_gain_model=antenna_gain_model, use_huawei_measurements=use_huawei_measurements,
                                  input_average_clutter_height_m=average_machine_height_m)
 
-            if ue_distribution_type == "Custom":
-                set_ues_los_condition_ue_bs(ue_array=ue_array, bs=bs, machine_array=machine_array)
-                for i in range(0, len(ue_array)):
-                    set_ues_los_condition_ue_ue(ue_array=ue_array, bs=ue_array[i], machine_array=machine_array,
-                                                machine_kind=machine_type)
-            elif ue_distribution_type == "Uniform":
-                set_ues_los_condition_ue_bs_unif(ue_array=ue_array, bs=bs, machine_array=machine_array)
-                for i in range(0, len(ue_array)):
-                    set_ues_los_condition_ue_ue_unif(ue_array=ue_array, bs=ue_array[i], machine_array=machine_array)
-
             compute_propagation_delays(ue_array=ue_array, bs=bs,
                                        input_simulator_tick_duration_s=simulator_tick_duration_s)
 
         else:
+
             for i in range(0, len(ue_array)):
                 ue_array[i].is_in_los = set_ues_los_condition_new(ue=ue_array[i], bs=bs, machine_array=machine_array,
                                                                   link='ue_bs')
@@ -939,7 +923,6 @@ for seed in range(initial_seed, final_seed + 1):
             bs.tx_also_ack = False
             bs.time_shift = 0
             for ue in ue_array:
-                ue.set_n_data_discarded(input_n_data_discarded=0)
                 ue.set_n_data_tx(input_n_data_tx=0)
                 ue.set_n_data_rx(input_n_data_rx=0)
                 ue.set_state(input_state=ue_starting_state)
@@ -955,7 +938,6 @@ for seed in range(initial_seed, final_seed + 1):
                 bs.packet_id_received[ue.get_ue_id()] = ([])
                 bs.temp_packet_id_received[ue.get_ue_id()] = ([])
                 bs.dict_rreq[ue.get_ue_id()] = ([])
-                ue.discarded_packets = 0
                 ue.source_rreq = list()
                 ue.relay_rreq = dict()
 
@@ -1093,7 +1075,6 @@ for seed in range(initial_seed, final_seed + 1):
                          factory_height=geometry_class.get_factory_height(),
                          machine_list=machine_array,
                          ue_list=ue_array,
-                         ris_list=ris_array,
                          bs=bs,
                          distribution_class=distribution_class,
                          scenario_name=scenario_name,
@@ -1103,7 +1084,6 @@ for seed in range(initial_seed, final_seed + 1):
                              factory_height=geometry_class.get_factory_height(),
                              machine_list=machine_array,
                              ue_list=ue_array,
-                             ris_list=ris_array,
                              bs=bs,
                              distribution_class=distribution_class,
                              scenario_name=scenario_name,

@@ -32,15 +32,12 @@ def compute_simulator_outputs(ue_array: ndarray, bs: BS, simulation_time_s: floa
         print("UE: ", ue.get_ue_id())
         print("DATA TX:", ue.get_n_data_tx())
         print("DATA RX AT BS: ", bs.get_n_data_rx_from_ues(input_ue_id=ue.get_ue_id()))
-        # print("DATA DISCARDED: ", ue.get_n_data_discarded())
-        # print("Percentage of packets discarded: ", ue.get_packet_discarded_perc())
 
         # Compute pmac and update the output dictionary
         if ue.get_n_data_tx() > 0:
             # Compute the pmac
             p_mac = bs.get_n_data_rx_from_ues(input_ue_id=ue.get_ue_id()) / ue.get_n_data_tx()
             output_dict['p_mac'][f"N={output_n_ue}"][f"Sim={output_n_sim}"][ue_index] = p_mac
-            # output_dict['Discarded_packets_percentage'][f"N={output_n_ue}"][f"Sim={output_n_sim}"][ue_index] = ue.get_packet_discarded_perc()
 
         # Compute the per-user network throughput, and average latency and update the output dictionary
         s_ue = (payload_fq_bytes * 8 * bs.get_n_data_rx_from_ues(input_ue_id=ue.get_ue_id())

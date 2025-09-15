@@ -7,7 +7,6 @@ import numpy as np
 
 from multi_hop_industrial_simulator.env.machine import Machine
 from multi_hop_industrial_simulator.network.bs import BS
-from multi_hop_industrial_simulator.network.ris import RIS
 from multi_hop_industrial_simulator.network.ue import Ue
 from multi_hop_industrial_simulator.env.distribution import Distribution
 
@@ -206,7 +205,7 @@ def plot_curves(x_data, y_data, x_label, y_label, legends,
 
 
 def plot_factory(factory_length: float, factory_width: float, factory_height: float,
-                 machine_list: List[Machine], ue_list: List[Ue], ris_list: List[RIS], bs: BS,
+                 machine_list: List[Machine], ue_list: List[Ue], bs: BS,
                  distribution_class: Distribution, scenario_name: str, save_file: str = None):
     fig = plt.figure()
     ax = fig.add_subplot(projection='3d')
@@ -356,150 +355,8 @@ def plot_factory(factory_length: float, factory_width: float, factory_height: fl
     plt.show()
 
 
-def plot_factory_paper(factory_length: float, factory_width: float, factory_height: float,
-                       machine_list: List[Machine], ue_list: List[Ue], ris_list: List[RIS], bs: BS,
-                       distribution_class: Distribution, scenario_name: str, save_file: str = None):
-    fig = plt.figure()
-    ax = fig.add_subplot(projection='3d')
-    ax.view_init(30, -50)  # Adjust elevation and azimuthal angles
-
-    # Set axis limit
-    ax.set_xlim([0, factory_length])
-    ax.set_ylim([0, factory_width])
-    ax.set_zlim([0, factory_height])
-
-    # Legend items + legend labels
-    legend_items = list()
-    legend_labels = list()
-
-    # Machine plot
-    for i in range(distribution_class.get_number_of_machines()):
-        legend_item = ax.scatter(machine_list[i].x_center, machine_list[i].y_center, machine_list[i].z_center,
-                                 color='dimgrey')
-
-        # Add the legend only one time
-        if i == 1:
-            legend_items.append(legend_item)
-            legend_labels.append('Machine Center')
-        machine_size = machine_list[i].get_machine_size()
-        plt.plot([machine_list[i].x_center - machine_size / 2, machine_list[i].x_center + machine_size / 2],
-                 [machine_list[i].y_center - machine_size / 2, machine_list[i].y_center - machine_size / 2],
-                 [machine_list[i].z_center - machine_size / 2, machine_list[i].z_center - machine_size / 2],
-                 color='dimgrey')
-        plt.plot([machine_list[i].x_center - machine_size / 2, machine_list[i].x_center - machine_size / 2],
-                 [machine_list[i].y_center - machine_size / 2, machine_list[i].y_center - machine_size / 2],
-                 [machine_list[i].z_center - machine_size / 2, machine_list[i].z_center + machine_size / 2],
-                 color='dimgrey')
-        plt.plot([machine_list[i].x_center - machine_size / 2, machine_list[i].x_center + machine_size / 2],
-                 [machine_list[i].y_center - machine_size / 2, machine_list[i].y_center - machine_size / 2],
-                 [machine_list[i].z_center + machine_size / 2, machine_list[i].z_center + machine_size / 2],
-                 color='dimgrey')
-        plt.plot([machine_list[i].x_center + machine_size / 2, machine_list[i].x_center + machine_size / 2],
-                 [machine_list[i].y_center - machine_size / 2, machine_list[i].y_center - machine_size / 2],
-                 [machine_list[i].z_center + machine_size / 2, machine_list[i].z_center - machine_size / 2],
-                 color='dimgrey')
-        plt.plot([machine_list[i].x_center - machine_size / 2, machine_list[i].x_center - machine_size / 2],
-                 [machine_list[i].y_center - machine_size / 2, machine_list[i].y_center + machine_size / 2],
-                 [machine_list[i].z_center - machine_size / 2, machine_list[i].z_center - machine_size / 2],
-                 color='dimgrey')
-        plt.plot([machine_list[i].x_center + machine_size / 2, machine_list[i].x_center + machine_size / 2],
-                 [machine_list[i].y_center - machine_size / 2, machine_list[i].y_center + machine_size / 2],
-                 [machine_list[i].z_center - machine_size / 2, machine_list[i].z_center - machine_size / 2],
-                 color='dimgrey')
-        plt.plot([machine_list[i].x_center - machine_size / 2, machine_list[i].x_center + machine_size / 2],
-                 [machine_list[i].y_center + machine_size / 2, machine_list[i].y_center + machine_size / 2],
-                 [machine_list[i].z_center - machine_size / 2, machine_list[i].z_center - machine_size / 2],
-                 color='dimgrey')
-        plt.plot([machine_list[i].x_center - machine_size / 2, machine_list[i].x_center - machine_size / 2],
-                 [machine_list[i].y_center + machine_size / 2, machine_list[i].y_center + machine_size / 2],
-                 [machine_list[i].z_center - machine_size / 2, machine_list[i].z_center + machine_size / 2],
-                 color='dimgrey')
-        plt.plot([machine_list[i].x_center + machine_size / 2, machine_list[i].x_center + machine_size / 2],
-                 [machine_list[i].y_center + machine_size / 2, machine_list[i].y_center + machine_size / 2],
-                 [machine_list[i].z_center - machine_size / 2, machine_list[i].z_center + machine_size / 2],
-                 color='dimgrey')
-        plt.plot([machine_list[i].x_center - machine_size / 2, machine_list[i].x_center + machine_size / 2],
-                 [machine_list[i].y_center + machine_size / 2, machine_list[i].y_center + machine_size / 2],
-                 [machine_list[i].z_center + machine_size / 2, machine_list[i].z_center + machine_size / 2],
-                 color='dimgrey')
-        plt.plot([machine_list[i].x_center + machine_size / 2, machine_list[i].x_center + machine_size / 2],
-                 [machine_list[i].y_center - machine_size / 2, machine_list[i].y_center + machine_size / 2],
-                 [machine_list[i].z_center + machine_size / 2, machine_list[i].z_center + machine_size / 2],
-                 color='dimgrey')
-        plt.plot([machine_list[i].x_center - machine_size / 2, machine_list[i].x_center - machine_size / 2],
-                 [machine_list[i].y_center - machine_size / 2, machine_list[i].y_center + machine_size / 2],
-                 [machine_list[i].z_center + machine_size / 2, machine_list[i].z_center + machine_size / 2],
-                 color='dimgrey')
-
-    # UE plot
-    index_rt = 0
-    index_nrt = 0
-    index_ct = 0
-
-    for index, ue in enumerate(ue_list):
-        if ue.traffic_type == 'traffic_rt':
-            legend_item = ax.scatter(ue.x, ue.y, ue.z, color='red')
-            index_rt += 1
-
-            # Add the legend only one time
-            if index_rt == 1:
-                legend_items.append(legend_item)
-                legend_labels.append('UE RT')
-
-        elif ue.traffic_type == 'traffic_nrt':
-            legend_item = ax.scatter(ue.x, ue.y, ue.z, color='green')
-            index_nrt += 1
-
-            # Add the legend only one time
-            if index_nrt == 1:
-                legend_items.append(legend_item)
-                legend_labels.append('UE NRT')
-
-        elif ue.traffic_type == 'traffic_cn':
-            legend_item = ax.scatter(ue.x, ue.y, ue.z, color='c')
-            index_ct += 1
-
-            # Add the legend only one time
-            if index_ct == 1:
-                legend_items.append(legend_item)
-                legend_labels.append('UE CN')
-
-        elif ue.traffic_type == 'traffic_fq':
-            legend_item = ax.scatter(ue.x, ue.y, ue.z, color='green', s=10)
-            index_ct += 1
-
-            # Add the legend only one time
-            if index_ct == 1:
-                legend_items.append(legend_item)
-                legend_labels.append('UE')
-
-    # BS plot
-    legend_items.append(ax.scatter(bs.x, bs.y, bs.z, s=40, color='k', marker="^"))
-    legend_labels.append('BS')
-
-    # Insert title
-    title = 'Factory layout ' + str(scenario_name)
-    # plt.title(title)
-
-    # Inser labels
-    plt.xlabel('Factory length [m]')
-    plt.ylabel('Factory width [m]')
-    ax.set_zlabel('Factory height [m]')
-
-    # Insert legend
-    plt.legend(legend_items, legend_labels)
-
-    # Save file
-    if save_file is not None:
-        plt.savefig(final_file_name_plot, dpi=300)
-        print('Output plot saved in {}'.format(final_file_name_plot))
-
-    # Show the plot
-    plt.show()
-
-
 def plot_snr(factory_length: float, factory_width: float, factory_height: float,
-             machine_list: List[Machine], ue_list: List[Ue], ris_list: List[RIS], bs: BS,
+             machine_list: List[Machine], ue_list: List[Ue], bs: BS,
              distribution_class: Distribution, scenario_name: str, apply_fading: bool, fading: float, shad: float,
              pt: float, save_file: str = None, snr_list: list = None,
              carrier_frequency_hz: list = None, ue_list_x: list = None, ue_list_y: list = None):
@@ -684,7 +541,7 @@ def plot_snr(factory_length: float, factory_width: float, factory_height: float,
     plt.show()
 
 def plot_ps(factory_length: float, factory_width: float, factory_height: float,
-             machine_list: List[Machine], ue_list: List[Ue], ris_list: List[RIS], bs: BS,
+             machine_list: List[Machine], ue_list: List[Ue], bs: BS,
              distribution_class: Distribution, scenario_name: str, apply_fading: bool, fading: float, shad: float,
              pt: float, save_file: str = None, ps_list: list = None,
              carrier_frequency_hz: list = None, ue_list_x: list = None, ue_list_y: list = None):
@@ -838,7 +695,7 @@ def write_data(val, file):
 
 
 def plot_scenario_2d(factory_length: float, factory_width: float, factory_height: float,
-                     machine_list: List[Machine], ue_list: List[Ue], ris_list: List[RIS], bs: BS,
+                     machine_list: List[Machine], ue_list: List[Ue], bs: BS,
                      distribution_class: Distribution, scenario_name: str, save_file: str = None, snr_list: list = None,
                      carrier_frequency_hz: list = None, x_y_list: list = None):
     plt.plot((0, 0), (factory_width, 0), color='red')
@@ -959,7 +816,7 @@ def plot_scenario_2d(factory_length: float, factory_width: float, factory_height
 
 
 def plot_scenario_2d2(factory_length: float, factory_width: float, factory_height: float,
-                      machine_list: List[Machine], ue_list: List[Ue], ris_list: List[RIS], bs: BS,
+                      machine_list: List[Machine], ue_list: List[Ue], bs: BS,
                       distribution_class: Distribution, scenario_name: str, save_file: str = None,
                       snr_list: list = None,
                       carrier_frequency_hz: list = None, x_y_list: list = None):
@@ -1058,7 +915,7 @@ def plot_scenario_2d2(factory_length: float, factory_width: float, factory_heigh
 
 
 def plot_factory_los_nlos(factory_length: float, factory_width: float, factory_height: float,
-                          machine_list: List[Machine], ue_list: List[Ue], ris_list: List[RIS], bs: BS,
+                          machine_list: List[Machine], ue_list: List[Ue], bs: BS,
                           distribution_class: Distribution, scenario_name: str, save_file: str = None):
     fig = plt.figure()
     ax = fig.add_subplot(projection='3d')
@@ -1174,7 +1031,7 @@ def plot_factory_los_nlos(factory_length: float, factory_width: float, factory_h
 
 
 def plot_factory_los_nlos_ue_ue(factory_length: float, factory_width: float, factory_height: float,
-                                machine_list: List[Machine], ue_list: List[Ue], ris_list: List[RIS], bs: BS,
+                                machine_list: List[Machine], ue_list: List[Ue], bs: BS,
                                 distribution_class: Distribution, scenario_name: str, k: int, save_file: str = None):
     fig = plt.figure()
     ax = fig.add_subplot(projection='3d')
@@ -1292,7 +1149,7 @@ def plot_factory_los_nlos_ue_ue(factory_length: float, factory_width: float, fac
 
 
 def plot_scenario_2d_los_nlos(factory_length: float, factory_width: float, factory_height: float,
-                              machine_list: List[Machine], ue_list: List[Ue], ris_list: List[RIS], bs: BS,
+                              machine_list: List[Machine], ue_list: List[Ue], bs: BS,
                               distribution_class: Distribution, scenario_name: str, save_file: str = None,
                               snr_list: list = None,
                               carrier_frequency_hz: list = None, x_y_list: list = None):
@@ -1382,7 +1239,7 @@ def plot_scenario_2d_los_nlos(factory_length: float, factory_width: float, facto
 
 
 def plot_scenario_2d_los_nlos_ue_ue(factory_length: float, factory_width: float, factory_height: float,
-                                    machine_list: List[Machine], ue_list: List[Ue], ris_list: List[RIS], bs: BS,
+                                    machine_list: List[Machine], ue_list: List[Ue], bs: BS,
                                     distribution_class: Distribution, scenario_name: str, k: int, save_file: str = None,
                                     snr_list: list = None,
                                     carrier_frequency_hz: list = None, x_y_list: list = None):

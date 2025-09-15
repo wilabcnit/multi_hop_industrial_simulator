@@ -4,12 +4,11 @@
 
 import numpy as np
 
-from timessim.network.ue import Ue
-from timessim.network.packet import Packet
+from multi_hop_industrial_simulator.network.ue import Ue
+from multi_hop_industrial_simulator.network.packet import Packet
 from numpy import ndarray
-from timessim.utils.utils_for_tb_ualoha_with_dqn import get_max_index, select_input_DRL
-from timessim.scheduler.DQN_agent_rl_mesh import epsilon_greedy_policy
-from timessim.utils.read_inputs import read_inputs
+from multi_hop_industrial_simulator.utils.utils_for_tb_ualoha_with_dqn import get_max_index, select_input_DRL
+from multi_hop_industrial_simulator.utils.read_inputs import read_inputs
 
 inputs = read_inputs('inputs.yaml')
 DDQN = inputs.get('rl').get('agent').get('DDQN')
@@ -108,128 +107,6 @@ def choose_next_action_tb_no_RL(input_ue: Ue, input_enable_print: bool = False):
                 packet.address = str(input_ue.get_unicast_rx_address())
             else:
                 packet.address = "-1"
-
-
-# Function to choose the next action to be taken by the UE {unicast, broadcast, forced broadcast} (Old RL version)
-def choose_next_action_tb_with_RL(input_ue: Ue, input_Rainbow_DQN: None, input_enable_print: bool = False, input_n_simulation: int = 0, input_n_simulations: int = 0, input_n_actions: int = 0, input_n_ues: int = 0, input_tx_results: dict = None):
-    """
-    Choose the next action to be taken by the UE when the UE use RL
-    """
-
-    counter_fw = 0
-    for packet in input_ue.ul_buffer.buffer_packet_list:
-        if packet.get_data_to_be_forwarded_bool() is True:
-            counter_fw += 1
-
-    # Check if the UE has to forward a packet
-    if counter_fw == 0:
-        input_ue.set_relay_bool(relay_bool=False)
-    else:
-        input_ue.set_relay_bool(relay_bool=True)
-
-    # Check if a new action has to be chosen
-    if input_ue.new_action_bool is True:
-        input_ue.new_action_bool = False
-        for packet in input_ue.get_updated_packet_list():
-            if packet.get_data_to_be_forwarded_bool() is False:
-                input_ue.action_packet_id = packet.get_id()
-                break
-        if input_enable_print:
-            print("UE ", input_ue.get_ue_id(), "set action packet id to: ",
-                  input_ue.action_packet_id)
-            print("UE ", input_ue.get_ue_id(), " neighbour table: ", input_ue.obs[0])
-            print("UE ", input_ue.get_ue_id(), " ack rx: ", input_ue.obs[1])
-            print("UE ", input_ue.get_ue_id(), " TTL: ", input_ue.obs[3])
-            print("UE ", input_ue.get_ue_id(), " bs seen: ", input_ue.obs[4])
-
-        if (input_ue.next_action is None or
-            (input_ue.next_action == 3 and (input_ue.obs[0][-1] == 1 or np.sum(input_ue.obs[0] * input_ue.obs[4]) > 0))):
-            if np.sum(input_ue.obs[
-                          0]) == 0:
-                # Forced Broadcast
-                input_ue.append_action_list(input_action=2)
-                input_ue.set_last_action(input_last_action=2)
-                input_ue.set_broadcast_bool(input_broadcast_bool=True)
-                input_ue.forced_broadcast_actions_counter += 1
-                input_ue.reset_complete_actions_since_last_ttl_reset(input_neighbour_number=input_n_ues)
-                input_ue.increment_all_actions_since_last_ttl_reset()
-                input_ue.reset_temp_obs()
-                if input_enable_print:  # Forced Broadcast without calling the RL
-                    print("UE ", input_ue.get_ue_id(),
-                          " has no neighbours -> Forced Broadcasting")
-
-            else:
-                # RL to choose the action
-                if input_n_simulation < input_n_simulations - 20:
-                    epsilon_function = 1 - (input_n_simulation / (input_n_simulations - 20))
-                else:
-                    epsilon_function = 0
-                input_ue.set_epsilon(
-                    input_epsilon=max(epsilon_function, 0.01))
-
-                if DDQN_new_state is True:
-                    input_ue.DRL_state = select_input_DRL(input_ack=input_ue.obs[1],input_prx=input_ue.obs[2],
-                                                          input_nodes_number=DRL_input_nodes_number,
-                                                          input_DRL_type_state=DRL_input_type_state,
-                                                          input_actions_list=input_ue.actions_since_last_ttl_reset)
-
-                    input_ue.set_last_action(input_last_action=epsilon_greedy_policy(state=input_ue.DRL_state,
-                                                                           input_n_actions=input_n_actions,
-                                                                           model=input_ue.get_model(),
-                                                                           categorical_dqn=input_Rainbow_DQN,
-                                                                           input_epsilon=input_ue.get_epsilon()))
-                else:
-                    input_ue.set_last_action(input_last_action=epsilon_greedy_policy(state=input_ue.obs[0],
-                                                                           input_n_actions=input_n_actions,
-                                                                           model=input_ue.get_model(),
-                                                                           categorical_dqn=input_Rainbow_DQN,
-                                                                           input_epsilon=input_ue.get_epsilon()))
-
-                if input_ue.get_last_action() == 0:
-                    input_ue.set_broadcast_bool(input_broadcast_bool=False)
-                    input_ue.set_unicast_rx_address(
-                        input_unicast_rx_address=input_ue.neighbour_table[
-                            get_max_index(input_ue.obs[0], input_ue.obs[1], input_ue.obs[2], input_ue.obs[4])])
-                    input_tx_results["UE_" + str(input_ue.get_ue_id())][
-                        input_ue.get_unicast_rx_address()] += 1
-                    input_ue.set_unicast_rx_index(
-                        input_unicast_rx_index=get_max_index(input_ue.obs[0], input_ue.obs[1],
-                                                             input_ue.obs[2], input_ue.obs[4]))
-                    input_ue.increment_actions_since_last_ttl_reset(input_neighbour_index=input_ue.get_unicast_rx_index())
-
-                    if input_enable_print:
-                        print("UE ", input_ue.get_ue_id(), " has chosen unicast towards ",
-                              input_ue.get_unicast_rx_address())
-
-                elif input_ue.get_last_action() == 1:
-                    input_ue.set_broadcast_bool(input_broadcast_bool=True)
-                    input_ue.increment_all_actions_since_last_ttl_reset()
-                    input_ue.reset_temp_obs()
-                    if input_enable_print:
-                        print("UE ", input_ue.get_ue_id(), " has chosen broadcast")
-
-
-        elif (input_ue.next_action == 3 and input_ue.obs[0][-1] == 0 and np.sum(
-                input_ue.obs[0] * input_ue.obs[4]) == 0):
-            # Forced Broadcast
-            input_ue.next_action = None
-            input_ue.set_last_action(input_last_action=2)
-            input_ue.set_broadcast_bool(
-                input_broadcast_bool=True)
-            input_ue.forced_broadcast_actions_counter += 1
-            input_ue.increment_all_actions_since_last_ttl_reset()
-            input_ue.reset_temp_obs()
-            if input_enable_print:  # Forced Broadcast without calling the RL
-                print("UE ", input_ue.get_ue_id(),
-                      " has received a packet generated by itself -> Forced Broadcasting")
-
-        # Assign the address to the packets in the UL buffer
-        for packet in input_ue.ul_buffer.buffer_packet_list:
-            if input_ue.get_broadcast_bool() is False:
-                packet.address = str(input_ue.get_unicast_rx_address())
-            else:
-                packet.address = "-1"
-
 
 ############### AODV ########################
 

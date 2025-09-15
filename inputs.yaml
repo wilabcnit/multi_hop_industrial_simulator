@@ -50,7 +50,7 @@ traffic_nrt : # NRT Node for data collection (exchange of data)
 traffic_fq:
     type : 4
     payload : 20  # B
-    overhead_data: 10 # B # TODO CHECK IF THERE IS A REFERENCE FOR THIS OVERHEAD
+    overhead_data: 10 # B
     percentage_of_ue : 100
 
 radio :
@@ -60,7 +60,7 @@ radio :
     modulation_order: 4  # 64-QAM modulation
 
 channel:
-    input_file_name: './timessim/channel_models/molecular_absorption_coefficients.xlsx'
+    input_file_name: './multi_hop_industrial_simulator/channel_models/molecular_absorption_coefficients.xlsx'
     input_sheet_name: 'Values'
     input_column_names: ['Carrier frequency [Hz]', 'Molecular absorption coefficient [m^-1]']
     path_loss_exponent: 2
@@ -85,11 +85,11 @@ geometry :
     inter_machine_distance : 5
 
 ue:
-    ue_spatial_distribution: 'Grid' #'Custom' #'Uniform' #Custom' #'Uniform' # "Custom" # 'Grid': UEs over the grid
+    ue_spatial_distribution: 'Grid' #'Uniform': randomly distributed in the environment # 'Grid': UEs over the grid
     ue_starting_state: "IDLE"
     max_buffer_size: 10000000000000000  # [B]
     ue_transmit_power_dbm: 30  # [dBm]
-    ue_gain_db: 5 # 8 conference; 6 Journal  # Used only if channel.antenna_gain_model = 'input'
+    ue_gain_db: 5 # Used only if channel.antenna_gain_model = 'input'
     ue_number_of_antennas : 1  # Used only if channel.antenna_gain_model = 'kumar salvia'
     ue_noise_figure_db: 5 # 9 conference; 8 Journal
     ue_antenna_efficiency: 1
@@ -98,31 +98,16 @@ bs:
     number_of_bs : 1
     bs_starting_state: "RX"
     bs_transmit_power_dbm: 35  # [dBm]
-    bs_gain_db: 10 # 10 conference; 9 Journal  # Used only if channel.antenna_gain_model = 'input'
+    bs_gain_db: 10 # Used only if channel.antenna_gain_model = 'input'
     bs_number_of_antennas: 25  # Used only if channel.antenna_gain_model = 'kumar salvia'
     bs_antenna_efficiency: 1
     bs_noise_figure_db: 4 # 8 conference; 4 Journal
 
-ris:
-    ris_spatial_distribution: "Uniform"  # TODO: Optimal deployment of RIS
-    ris_size: 2 # [m]
-    number_of_ris: 0
-    num_configurations: 3
-    config_dimension: 2
-    processing_delay: 100  # [µs]
-
 scenario:
-    name: 'grid'  # Choose from {'birex', 'aetna', 'custom', 'aetna_wcnc', 'aetna_deliverable', 'grid'}
+    name: 'grid'
     input_file_name: 'input_scenario_grid.xlsx'
     input_sheet_names: {
-                           'birex' : 'bi-rex_layout',
-                           'aetna' : 'aetna_layout',
-                           'aetna_wcnc': 'aetna_layout_WCNC',
-                           'aetna_eucnc': 'aetna_layout_EUCNC',
-                           'aetna_deliverable': 'aetna_layout_deliverable_TIMES',
-                           'huawei' : 'huawei_layout',
-                           'custom' : 'custom_layout',
-                           'grid': 'grid_layout'
+        'grid': 'grid_layout'
     }
     machine_type: 'full'  # full if the radio link within a machine is considered as NLoS, empty otherwise
 

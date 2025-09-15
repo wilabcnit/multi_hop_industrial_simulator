@@ -15,11 +15,7 @@ def check_for_neighbours(ue_array: ndarray, machine_array: ndarray, bs: BS, inpu
                          input_apply_fading: bool, input_clutter_density: float, input_shadowing_sample_index: int,
                          use_huawei_measurements: bool, input_average_clutter_height_m: float,
                          antenna_gain_model: str = None):
-    # set_ues_los_condition(ue_array=ue_array, bs=bs, machine_array=machine_array, link='bs_ue',
-    #                       machine_kind=machine_kind)
-    # for i in range(0, len(ue_array)):
-    #     set_ues_los_condition(ue_array=ue_array, bs=ue_array[i], machine_array=machine_array, link='ue_ue',
-    #                           machine_kind=machine_kind)
+
     neighbours_found = False
     n_connected = 0
     not_connected_ues = list()
@@ -104,7 +100,7 @@ def check_for_neighbours(ue_array: ndarray, machine_array: ndarray, bs: BS, inpu
             for ue in ue_array:
                 if ue.get_ue_id() == changing_ue and ue.get_ue_id() in connected_ues:
                     connected_ues.remove(ue.get_ue_id())
-                    machine_second = [0, 2, 4, 6]  # if aetna_wcnc machine_second arrives until 8
+                    machine_second = [0, 2, 4, 6]
                     while connected_to_bs is True:
                         machine_chosen = random.choice(machine_second)
                         x = (random.random() * (
@@ -169,7 +165,7 @@ def check_for_neighbours(ue_array: ndarray, machine_array: ndarray, bs: BS, inpu
             # No neighbours found
             if neighbours_found is False:
                 # Machine in the second tear of the factory ->
-                machine_second = [0, 2, 4, 6]  # if aetna_wcnc machine_second arrives until 8
+                machine_second = [0, 2, 4, 6]
                 while neighbours_found is False:
                     machine_chosen = random.choice(machine_second)
                     x = (random.random() * (machine_array[machine_chosen].x_max - machine_array[machine_chosen].x_min) +
