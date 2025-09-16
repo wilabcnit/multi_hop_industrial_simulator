@@ -72,7 +72,7 @@ The simulator requires an input file in YAML format, which specifies all the par
 - MAC Parameters:
     - Medium Access Control settings are configured in the aloha_protocol section of the YAML file.
 - Power Consumption:
--     Set the power consumed (W) by UEs and the BS in the different MAC protocol states (e.g., transmit, receive, idle, backoff, wait_ack and propagation).
+    - Set the power consumed (W) by UEs and the BS in the different MAC protocol states (e.g., transmit, receive, idle, backoff, wait_ack and propagation).
 - Reinforcement Learning (RL) Parameters:
     - Router parameters: Time-To-Live (TTL), initial contention window size, and buffer size (optimized during training).
     - Agent parameters: learning rate and other RL-specific hyperparameters.
