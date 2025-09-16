@@ -87,5 +87,25 @@ The simulator requires an input file in YAML format, which specifies all the par
         - mobility_shuffle: True → UEs “move” by exchanging their coordinates, repeated mobility_changes times.
         - If all mobility options are False, the scenario is static.
 
+Reception Tracking Structure:
+
+In the Test files, the simulator maintains a hierarchical dictionary to track all packet receptions between UEs and the BS.
+- Top-level keys: node IDs (UEs and BS).
+- Second-level keys: type of reception event:
+    - DATA_RX for data packets;
+    - ACK_RX for acknowledgments;
+    - RREQ_RX and RREP_RX for AODV routing messages.
+- Third-level keys: IDs of peers from which packets were received.
+- Values: a list containing reception details:
+    - tick_start, tick_end: simulation ticks of reception;
+    - packet_size: size of DATA packet (for DATA_RX);
+    - dest_ue_id: destination UE ID for ACKs;
+    - packet_id: ID of the DATA, or referenced DATA for ACK transmission.
+
+Event-Driven Updates:
+
+The simulator is discrete-time and event-driven. The reception structure is updated dynamically whenever a new event occurs. Fields may be inserted or removed. It operates as a state machine, with each state corresponding to a phase of routing algorithm and the Aloha protocol.
+To improve efficiency, the simulator jumps to the next event instead of advancing one tick at a time when no events occur. This requires careful updating and verification of the reception structure at each time jump.
+
 The main reference for the simulator is the paper: "MAC and Routing Protocols Design in Multi-Hop Terahertz Networks", S. Cavallero, A. Pumilia, G. Cuozzo, C. Buratti....
 
