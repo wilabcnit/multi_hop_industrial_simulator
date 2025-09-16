@@ -82,10 +82,10 @@ The simulator requires an input file in YAML format, which specifies all the par
     - Number of simulations performed (to improve statistical reliability of results);
     - Star_topology: set to False to enable multi-hop communication;
     - Mobility options:
-        - mobility_obstacle: true → obstacles (machines) move clockwise within the environment (step size = 2.25 or 4.5 m).
-        - mobility_spawn: true → additional obstacles (Machines 9–11 in input_scenario_grid.xlsx) enter the grid, blocking/creating links.
-        - mobility_shuffle: true → UEs “move” by exchanging their coordinates, repeated mobility_changes times.
-        - If all mobility options are false, the scenario is static.
+        - mobility_obstacle: True → obstacles (machines) move clockwise within the environment (step size = 2.25 or 4.5 m).
+        - mobility_spawn: True → additional obstacles (Machines 9–11 in input_scenario_grid.xlsx) enter the grid, blocking/creating links.
+        - mobility_shuffle: True → UEs “move” by exchanging their coordinates, repeated mobility_changes times.
+        - If all mobility options are False, the scenario is static.
 
 The main reference for the simulator is the paper: "MAC and Routing Protocols Design in Multi-Hop Terahertz Networks", S. Cavallero, A. Pumilia, G. Cuozzo, C. Buratti....
 
