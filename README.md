@@ -1,11 +1,14 @@
 # multi_hop_industrial_simulator
-This is a discrete-time network simulator, written in Python, that models a THz wireless network for an Industrial Internet of Things (IIoT) scenario in the context of the TIMES project. 
+This is a discrete-time network simulator, written in Python, that models a THz wireless network for an Industrial Internet of Things (IIoT) scenario in the context of the TIMES project (www.times6g.eu). 
 It is designed to evaluate the performance of multi-hop communication in a factory-like scenario, with a focus on success probability, average latency, network throughput and jain index. 
+
+# Theoretical Background:
+
 To enable multi-hop efficiently, three different routing algorithms have been implemented: 
 
 1. Table-Based (TB) - it is the proposed solution, where route discovery and maintenance are performed through user-plane data exhchanges only. TB is also extended with a Multi-Agent Deep Reinforcement Learning (MADRL) algorithm to autonomously adapt several Medium Access Control (MAC) parameters;
 2. Table-Less (TL) - it is a broadcast-based protocol that forwards all received data without maintaining routing tables;
-3. Ad hoc On-Demand Distance Vector (AODV) - it relies on control messages for neighbor and route discovery.
+3. Ad hoc On-Demand Distance Vector (AODV) - it is a reactive protocol that relies on control messages for neighbor and route discovery (https://doi.org/10.1145/581291.581300).
 
 All routing algorithms operate on top of an unslotted Aloha MAC protocol, while for the wireless propagation, the simulator can use either an experimentally derived channel model, or  the 3GPP indoor factory channel model from TR 38.901.  
 
@@ -20,7 +23,7 @@ The simulation environment models an industrial scenario with the following char
     - As soon as a DATA packet is successfully delivered (or discarded after exceeding the maximum number of retransmission attempts), a new packet is immediately generated.  
 These assumptions ensure that the network operates under saturated traffic conditions, highlighting the impact of routing strategies and channel impairments on performance.
 
-Repository Structure:
+# Simulator Structure:
 
 - env - Deployment of the reference scenario:
   - Creates the industrial layout (parallelepiped);
@@ -28,7 +31,8 @@ Repository Structure:
 - Network - Defines UEs and BS:
   - Initialization of entities;
   - Methods for interaction and simulation execution.
-- Traffic_models
+- Traffic_models:
+  - Methods for setting the input traffic characteristics (periodicity, exponential distribution or full queue mode)
 - Channel_models:
   - Path loss computation;
   - Received power calculation;
@@ -87,7 +91,7 @@ The simulator requires an input file in YAML format, which specifies all the par
         - mobility_shuffle: True → UEs “move” by exchanging their coordinates, repeated mobility_changes times.
         - If all mobility options are False, the scenario is static.
 
-Reception Tracking Structure:
+# Simulator Working Principle:
 
 In the Test files, the simulator maintains a hierarchical dictionary to track all packet receptions between UEs and the BS.
 - Top-level keys: node IDs (UEs and BS).
