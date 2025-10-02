@@ -28,26 +28,29 @@ These assumptions ensure that the network operates under saturated traffic condi
 - env - Deployment of the reference scenario:
   - Creates the industrial layout (parallelepiped);
   - Positions UEs, BS, and machines (obstacles) at predefined locations and according to the selected distribution type.
-- Network - Defines UEs and BS:
+- network - Defines UEs and BS:
   - Initialization of entities;
   - Methods for interaction and simulation execution.
-- Traffic_models:
+- traffic_models:
   - Methods for setting the input traffic characteristics (periodicity, exponential distribution or full queue mode)
-- Channel_models:
+- channel_models:
   - Path loss computation;
   - Received power calculation;
   - Absorption effects evaluation.
-- Utils - Utility functions:
+- dqn_agent:
+    - TensorFlow/Keras implementations of DQN, Double DQN, and Rainbow DQN;
+    - Model architectures, replay buffers, action-selection policies, and training routines for reinforcement learning with discrete actions.
+- utils - Utility functions:
   - Interference and collision check at the receiver;
   - LOS/NLOS condition evaluation;
   - Next-action logic for the RL-based algorithm;
   - Instantiation of UEs and BS.
-- Test: main files for routing strategies:
+- test: main files for routing strategies:
   - TB;
   - TL;
   - AODV;
   - TB with MADRL.
-- Results: Folder for storing simulation outputs.
+- results: Folder for storing simulation outputs.
 
 Input File Description:
 
