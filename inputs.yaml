@@ -98,7 +98,7 @@ bs:
 
 scenario:
     name: 'grid'
-    input_file_name: 'input_scenario_grid.xlsx'
+    input_file_name: 'input_scenario.xlsx'
     input_sheet_names: {
         'grid': 'grid_layout'
     }
@@ -113,11 +113,11 @@ aloha_protocol:
 
 # High-Level simulation parameters
 simulation:
-    tot_simulation_time_s: 0.00005 # s
+    tot_simulation_time_s: 0.0005 # s
     n_simulations : 1
-    initial_number_of_ues : 12
+    initial_number_of_ues : 6
     step_number_of_ues : 6
-    final_number_of_ues : 12
+    final_number_of_ues : 6
     initial_seed: 18
     final_seed: 18
     seed: 18

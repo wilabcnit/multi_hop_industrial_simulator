@@ -87,113 +87,12 @@ def sample_experiences(input_batch_size, replay_buffer):
     ]  # [states, actions, rewards, next_states, dones]
 
 
-# New function to sample experiences from the replay buffer with half of the batch size of action 1 and half of action 0
-"""def sample_experiences(input_batch_size, replay_buffer):
-    # Separate experiences based on action
-    # random_0 = False
-    # random_1 = False
-    action_0_experiences = [exp for exp in replay_buffer if exp[1] == 0]
-    action_1_experiences = [exp for exp in replay_buffer if exp[1] == 1]
-    #print(len(action_0_experiences))
-    #print(len(action_1_experiences))
-    # print(action_0_experiences[-1])
-    # Determine half the batch size
-    half_batch_size = input_batch_size / 2
-
-    # Sample half_batch_size experiences from each action group
-
-    indices = np.random.randint(len(action_0_experiences), size=input_batch_size)
-    batch_0 = [action_0_experiences[index] for index in indices]
-    indices = np.random.randint(len(action_1_experiences), size=input_batch_size)
-    batch_1 = [action_1_experiences[index] for index in indices]
-    # Combine the two halves
-    batch = list(batch_0) + list(batch_1)
-
-    # Shuffle the batch to mix experiences
-    np.random.shuffle(batch)
-
-    # Create the batch in the required format
-    return [
-        np.array([experience[field_index] for experience in batch])
-        for field_index in range(len(replay_buffer[0]))
-    ]  # [states, actions, rewards, next_states, dones]"""
-
-"""def play_one_step(input_env, state, input_n_actions, input_epsilon, replay_buffer, model):
-    action = epsilon_greedy_policy(state[0], input_n_actions, model, input_epsilon)
-    next_state, output_reward, output_done, output_truncated = input_env.step(action, state[0:4], state[4])
-    replay_buffer.append((state[0], action, output_reward, next_state[0], output_done, output_truncated))
-    return next_state, output_reward, output_done, output_truncated, replay_buffer
-"""
-
-"""def training_step(input_batch_size, input_n_actions, input_replay_buffer, input_model):
-    experiences = sample_experiences(input_batch_size, input_replay_buffer)
-    states, actions, output_rewards, next_states, dones = experiences
-
-    #new implementation
-    states = tf.convert_to_tensor(states, dtype=tf.float32)
-    actions = tf.convert_to_tensor(actions, dtype=tf.int32)
-    output_rewards = tf.convert_to_tensor(output_rewards, dtype=tf.float32)
-    next_states = tf.convert_to_tensor(next_states, dtype=tf.float32)
-    dones = tf.convert_to_tensor(dones, dtype=tf.float32)
-    #end new implementation
-
-
-    next_q_values = input_model.predict(next_states, verbose=0)
-    max_next_q_values = next_q_values.max(axis=1)
-    runs = 1.0 - dones  # simulation is not done
-    target_q_values = output_rewards + runs * discount_factor * max_next_q_values
-    #target_q_values = target_q_values.reshape(-1, 1)
-    target_q_values = tf.reshape(target_q_values, (-1, 1))
-    mask = tf.one_hot(actions, input_n_actions)
-
-    with tf.GradientTape() as tape:
-        all_q_values = input_model(states)
-        q_values = tf.reduce_sum(all_q_values * mask, axis=1, keepdims=True)
-        loss = tf.reduce_mean(loss_fn(target_q_values, q_values))
-
-    grads = tape.gradient(loss, input_model.trainable_variables)
-    optimizer.apply_gradients(zip(grads, input_model.trainable_variables))
-
-    return input_model"""
-
-
 ############################## Double DQN ##############################
 
 # Update the target model with the weights of the main model
 def update_target_model(input_main_model, input_target_model):
     input_target_model.set_weights(input_main_model.get_weights())
     return input_target_model
-
-
-"""def training_step(input_batch_size, input_n_actions, input_replay_buffer, input_model, input_target_model):
-    experiences = sample_experiences(input_batch_size, input_replay_buffer)
-    states, actions, rewards, next_states, dones = experiences
-
-    # Convert experiences to tensors
-    states = tf.convert_to_tensor(states, dtype=tf.float32)
-    actions = tf.convert_to_tensor(actions, dtype=tf.int32)
-    rewards = tf.convert_to_tensor(rewards, dtype=tf.float32)
-    next_states = tf.convert_to_tensor(next_states, dtype=tf.float32)
-    dones = tf.convert_to_tensor(dones, dtype=tf.float32)
-
-    next_q_values = input_model.predict(next_states, verbose=0)
-    next_actions = np.argmax(next_q_values, axis=1)
-
-    target_q_values = input_target_model.predict(next_states, verbose=0)
-    max_next_q_values = target_q_values[np.arange(input_batch_size), next_actions]
-
-    runs = 1.0 - dones
-    target_q_values = rewards + runs * discount_factor * max_next_q_values
-    target_q_values = target_q_values.reshape(-1, 1)
-    mask = tf.one_hot(actions, input_n_actions)
-
-    with tf.GradientTape() as tape:
-        all_q_values = input_model(states)
-        q_values = tf.reduce_sum(all_q_values * mask, axis=1, keepdims=True)
-        loss = tf.reduce_mean(loss_fn(target_q_values, q_values))
-
-    grads = tape.gradient(loss, input_model.trainable_variables)
-    optimizer.apply_gradients(zip(grads, input_model.trainable_variables))"""
 
 
 ####################### 2 implementation DDQN ###################################

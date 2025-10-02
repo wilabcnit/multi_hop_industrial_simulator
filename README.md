@@ -67,7 +67,7 @@ The simulator requires an input file in YAML format, which specifies all the par
     - Molecular absorption coefficients are provided in a separate file but are not used by default.
 - UE Configuration:
     - Choose deployment type: "Grid" or "Uniform".
-    - For "Grid", positions are read from input_scenario_grid.xlsx. To change placement, modify this file and re-distribute UEs to ensure connectivity.
+    - For "Grid", positions are read from input_scenario.xlsx. To change placement, modify this file and re-distribute UEs to ensure connectivity.
     - Set UE-related parameters (antenna gain, number of antennas, transmit power and noise figure).
 - Base Station (BS) Configuration:
     - Define all BS-related parameters (antenna gain, number of antennas, transmit power and noise figure).
@@ -87,7 +87,7 @@ The simulator requires an input file in YAML format, which specifies all the par
     - Star_topology: set to False to enable multi-hop communication;
     - Mobility options:
         - mobility_obstacle: True → obstacles (machines) move clockwise within the environment (step size = 2.25 or 4.5 m).
-        - mobility_spawn: True → additional obstacles (Machines 9–11 in input_scenario_grid.xlsx) enter the grid, blocking/creating links.
+        - mobility_spawn: True → additional obstacles (Machines 9–11 in input_scenario.xlsx) enter the grid, blocking/creating links.
         - mobility_shuffle: True → UEs “move” by exchanging their coordinates, repeated mobility_changes times.
         - If all mobility options are False, the scenario is static.
 
