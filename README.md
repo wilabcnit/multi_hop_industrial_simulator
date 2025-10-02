@@ -28,26 +28,29 @@ These assumptions ensure that the network operates under saturated traffic condi
 - env - Deployment of the reference scenario:
   - Creates the industrial layout (parallelepiped);
   - Positions UEs, BS, and machines (obstacles) at predefined locations and according to the selected distribution type.
-- Network - Defines UEs and BS:
+- network - Defines UEs and BS:
   - Initialization of entities;
   - Methods for interaction and simulation execution.
-- Traffic_models:
+- traffic_models:
   - Methods for setting the input traffic characteristics (periodicity, exponential distribution or full queue mode)
-- Channel_models:
+- channel_models:
   - Path loss computation;
   - Received power calculation;
   - Absorption effects evaluation.
-- Utils - Utility functions:
+- dqn_agent:
+    - TensorFlow/Keras implementations of DQN, Double DQN, and Rainbow DQN;
+    - Model architectures, replay buffers, action-selection policies, and training routines for reinforcement learning with discrete actions.
+- utils - Utility functions:
   - Interference and collision check at the receiver;
   - LOS/NLOS condition evaluation;
   - Next-action logic for the RL-based algorithm;
   - Instantiation of UEs and BS.
-- Test: main files for routing strategies:
+- test: main files for routing strategies:
   - TB;
   - TL;
   - AODV;
   - TB with MADRL.
-- Results: Folder for storing simulation outputs.
+- results: Folder for storing simulation outputs.
 
 Input File Description:
 
@@ -110,6 +113,30 @@ Event-Driven Updates:
 
 The simulator is discrete-time and event-driven. The reception structure is updated dynamically whenever a new event occurs. Fields may be inserted or removed. It operates as a state machine, with each state corresponding to a phase of routing algorithm and the Aloha protocol.
 To improve efficiency, the simulator jumps to the next event instead of advancing one tick at a time when no events occur. This requires careful updating and verification of the reception structure at each time jump.
+
+## Installation and Requirements:
+
+This project has been developed and tested with **Python 3.9.18** and the following key packages:
+
+- numpy==1.26.4
+- pandas==2.2.3
+- matplotlib==3.9.2
+- scipy==1.13.1
+- h5py==3.12.1
+- pyyaml==6.0.2
+- openpyxl==3.1.5
+- tensorflow==2.10.0
+- keras==2.10.0
+- protobuf==3.20.3
+
+Clone the repository and install the dependencies:
+
+```bash
+git clone https://github.com/<your-username>/<your-repo>.git (inserire nome finale)
+cd <your-repo>
+pip install <package_name>==<package_version>
+
+## How to use it:
 
 The main reference for the simulator is the paper: "MAC and Routing Protocols Design in Multi-Hop Terahertz Networks", S. Cavallero, A. Pumilia, G. Cuozzo, C. Buratti....
 
