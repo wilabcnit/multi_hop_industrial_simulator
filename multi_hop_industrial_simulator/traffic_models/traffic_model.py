@@ -1,9 +1,6 @@
-import random
-import sys
+
 import numpy as np
 import math
-import matplotlib.pyplot as plt
-
 
 class TrafficModel:
     def __init__(self, input_full_queue: bool):

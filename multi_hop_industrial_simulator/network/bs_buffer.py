@@ -1,5 +1,3 @@
-import operator
-import numpy as np
 
 from multi_hop_industrial_simulator.network.packet import Packet
 

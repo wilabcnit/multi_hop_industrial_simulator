@@ -1,11 +1,6 @@
-import sys
-from typing import List, Tuple
-
-import numpy as np
 from math import log10
 from scipy import constants as ct
 
-from multi_hop_industrial_simulator.utils.read_input_file import read_input_file
 from multi_hop_industrial_simulator.utils.get_antenna_gain_db import get_antenna_gain_db
 from multi_hop_industrial_simulator.network.ue import Ue
 from multi_hop_industrial_simulator.network.bs import BS

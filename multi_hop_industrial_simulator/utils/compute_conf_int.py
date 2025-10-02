@@ -3,9 +3,6 @@ import numpy as np
 from scipy import stats
 
 
-from multi_hop_industrial_simulator.utils.read_input_file import read_input_file
-from multi_hop_industrial_simulator.utils.read_inputs import read_inputs
-
 # Function to compute the 95% confidence interval for the metrics
 def compute_conf_int(output_dict, n_simulated_ues, n_simulations):
 

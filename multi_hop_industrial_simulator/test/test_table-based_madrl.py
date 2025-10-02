@@ -21,29 +21,26 @@ from multi_hop_industrial_simulator.utils.check_success import check_collision_b
 from multi_hop_industrial_simulator.utils.compute_distance_m import compute_distance_m
 from multi_hop_industrial_simulator.utils.compute_propagation_delays import compute_propagation_delays
 from multi_hop_industrial_simulator.utils.compute_simulation_outputs import compute_simulator_outputs
-from multi_hop_industrial_simulator.utils.compute_snr_threshold import compute_snr_threshold_db
 from multi_hop_industrial_simulator.utils.instantiate_bs import instantiate_bs
-from multi_hop_industrial_simulator.utils.instantiate_ris import instantiate_ris
 from multi_hop_industrial_simulator.utils.read_input_file import read_input_file
 from multi_hop_industrial_simulator.utils.read_inputs import read_inputs
 from multi_hop_industrial_simulator.env.geometry import Geometry
 from multi_hop_industrial_simulator.env.distribution import Distribution
+from multi_hop_industrial_simulator.env.machine import Machine
 from multi_hop_industrial_simulator.utils.instantiate_ues import instantiate_ues
 from multi_hop_industrial_simulator.utils.compute_simulator_tick_duration import compute_simulator_tick_duration
 from multi_hop_industrial_simulator.channel_models.THz_channel import THzChannel
 from multi_hop_industrial_simulator.utils.check_for_neighbours import check_for_neighbours
 
-from multi_hop_industrial_simulator.utils.set_ues_los_condition_vecchio import set_ues_los_condition_ue_bs, \
-    set_ues_los_condition_ue_ue, set_ues_los_condition_ue_bs_unif, set_ues_los_condition_ue_ue_unif
-from multi_hop_industrial_simulator.utils.set_ues_los_condition import set_ues_los_condition_new
+from multi_hop_industrial_simulator.utils.set_ues_los_condition import set_ues_los_condition
 
 # RL dependencies
 
 import tensorflow as tf
 from collections import deque
-from multi_hop_industrial_simulator.scheduler.DQN_agent_rl_mesh import epsilon_greedy_policy, training_step, get_model, get_dueling_model, \
-    optimizer, loss_fn, update_target_model, CategoricalDQN, PrioritizedReplayBuffer, rainbow_training_step
-from multi_hop_industrial_simulator.utils.plot_rewards_per_n_ue import plot_rewards_per_n_ue, plot_actions_per_n_ue
+from multi_hop_industrial_simulator.dqn_agent.dqn_agent_rl_mesh import (training_step, get_model, optimizer, loss_fn,
+                                                                        update_target_model)
+from multi_hop_industrial_simulator.utils.plot_rewards_per_n_ue import plot_rewards_per_n_ue
 from multi_hop_industrial_simulator.utils.choose_next_action import choose_next_action_tb_no_RL
 from multi_hop_industrial_simulator.utils.choose_next_action_Q_and_W import  choose_next_action_tb_only_W, choose_next_action_tb_only_Q
 
@@ -418,7 +415,6 @@ initial_seed = inputs.get('simulation').get('initial_seed')
 final_seed = inputs.get('simulation').get('final_seed')
 # seed = inputs.get('simulation').get('seed')
 ue_distribution_type = inputs.get('ue').get('ue_spatial_distribution')
-ris_distribution_type = inputs.get('ris').get('ris_spatial_distribution')
 ue_distribution = inputs.get('ue').get('ue_spatial_distribution')
 initial_number_of_ues = inputs.get('simulation').get('initial_number_of_ues')
 step_number_of_ues = inputs.get('simulation').get('step_number_of_ues')
@@ -428,8 +424,6 @@ ue_starting_state = inputs.get('ue').get('ue_starting_state')
 bs_starting_state = inputs.get('bs').get('bs_starting_state')
 payload = inputs.get('traffic_rt').get('payload')
 period = inputs.get('traffic_rt').get('period')
-ris_distribution = inputs.get('ris').get('ris_spatial_distribution')
-n_ris = inputs.get('ris').get('number_of_ris')
 on_collection_nrt_s = inputs.get('traffic_nrt').get('collection_on_duration')
 standby_collection_nrt_s = inputs.get('traffic_nrt').get('collection_standby_duration')
 optimization_nrt_s = inputs.get('traffic_nrt').get('optimization_duration')
@@ -537,11 +531,9 @@ geometry_class = Geometry(scenario_df=scenario_df)
 
 # Initialize distribution environment
 distribution_class = Distribution(ue_distribution_type=ue_distribution_type,
-                                  ris_distribution_type=ris_distribution_type,
                                   machine_distribution_type=scenario_name,
                                   scenario_df=scenario_df,
-                                  tot_number_of_ues=initial_number_of_ues,
-                                  tot_number_of_ris=n_ris)
+                                  tot_number_of_ues=initial_number_of_ues)
 
 # Distribute machines
 machine_array = distribution_class.distribute_machines(scenario_df=scenario_df)
@@ -560,9 +552,6 @@ if len(machine_array) > 0:
 # Compute the tick duration
 simulator_tick_duration_s = compute_simulator_tick_duration(input_params_dict=inputs)
 
-# Instantiate the RISs
-ris_array = instantiate_ris(input_params_dict=inputs)
-
 # Instantiate the BS
 bs = instantiate_bs(input_params_dict=inputs, simulator_tick_duration=simulator_tick_duration_s,
                     starting_state=bs_starting_state, bit_rate_gbits=bit_rate_gbits)
@@ -575,8 +564,6 @@ thz_channel = THzChannel(params=inputs)
 
 # Compute the SNR threshold
 payload_fq = inputs.get('traffic_fq').get('payload')
-snr_threshold_db = compute_snr_threshold_db(input_payload_bytes=payload_fq, input_p_succ_phy=p_succ_phy)
-print("SNR THRESHOLD: ", snr_threshold_db)
 
 # Compute the simulation duration
 tot_simulation_time_tick = math.ceil(simulation_time_s / simulator_tick_duration_s)
@@ -688,54 +675,46 @@ for seed in range(initial_seed, final_seed + 1):
         print("The max propagation delay is", max_prop_delay_tick)
 
         # Set UE LoS/NLoS condition
+        # Set UE LoS/NLoS condition
         if ue_distribution_type != "Grid":
 
-            if ue_distribution_type == "Custom":
-                set_ues_los_condition_ue_bs(ue_array=ue_array, bs=bs, machine_array=machine_array)
+            for i in range(0, len(ue_array)):
+                ue_array[i].is_in_los = set_ues_los_condition(ue=ue_array[i], bs=bs, machine_array=machine_array,
+                                                              link='ue_bs')
+
+            for j in range(0, len(ue_array)):
                 for i in range(0, len(ue_array)):
-                    set_ues_los_condition_ue_ue(ue_array=ue_array, bs=ue_array[i], machine_array=machine_array,
-                                                machine_kind=machine_type)
-            elif ue_distribution_type == "Uniform":
-                set_ues_los_condition_ue_bs_unif(ue_array=ue_array, bs=bs, machine_array=machine_array)
-                for i in range(0, len(ue_array)):
-                    set_ues_los_condition_ue_ue_unif(ue_array=ue_array, bs=ue_array[i], machine_array=machine_array)
+                    los_condition = set_ues_los_condition(ue=ue_array[j], bs=ue_array[i],
+                                                          machine_array=machine_array,
+                                                          link='ue_ue')
+                    ue_array[j].is_in_los_ues.append(los_condition)
+
+            # Method to ensure that in case of UEs' Uniform distribution they can have at least one neighbour
+            # to reach the BS
 
             check_for_neighbours(ue_array=ue_array, machine_array=machine_array, bs=bs,
-                                 input_snr_threshold_db=snr_th_db,
+                                 input_snr_threshold_db=sinr_th_db,
                                  input_shadowing_sample_index=0, input_thz_channel=thz_channel,
                                  input_carrier_frequency_ghz=carrier_frequency_ghz, input_bandwidth_hz=bandwidth_hz,
                                  input_apply_fading=apply_fading, input_clutter_density=clutter_density,
                                  antenna_gain_model=antenna_gain_model, use_huawei_measurements=use_huawei_measurements,
                                  input_average_clutter_height_m=average_machine_height_m)
 
-            if ue_distribution_type == "Custom":
-                set_ues_los_condition_ue_bs(ue_array=ue_array, bs=bs, machine_array=machine_array)
-                for i in range(0, len(ue_array)):
-                    set_ues_los_condition_ue_ue(ue_array=ue_array, bs=ue_array[i], machine_array=machine_array,
-                                                machine_kind=machine_type)
-            elif ue_distribution_type == "Uniform":
-                set_ues_los_condition_ue_bs_unif(ue_array=ue_array, bs=bs, machine_array=machine_array)
-                for i in range(0, len(ue_array)):
-                    set_ues_los_condition_ue_ue_unif(ue_array=ue_array, bs=ue_array[i], machine_array=machine_array)
-
             compute_propagation_delays(ue_array=ue_array, bs=bs,
                                        input_simulator_tick_duration_s=simulator_tick_duration_s)
 
         else:
+
             for i in range(0, len(ue_array)):
-                ue_array[i].is_in_los = set_ues_los_condition_new(ue=ue_array[i], bs=bs, machine_array=machine_array,
-                                                                  link='ue_bs')
-                # print("UE: ", ue_array[i].ue_id, " = ", ue_array[i].get_channel_condition_with_bs())
-                # print("UE ", ue_array[i].ue_id, " LOS condition with BS: ", ue_array[i].is_in_los)
+                ue_array[i].is_in_los = set_ues_los_condition(ue=ue_array[i], bs=bs, machine_array=machine_array,
+                                                              link='ue_bs')
 
             for j in range(0, len(ue_array)):
                 for i in range(0, len(ue_array)):
-                    los_condition = set_ues_los_condition_new(ue=ue_array[j], bs=ue_array[i],
-                                                              machine_array=machine_array,
-                                                              link='ue_ue')
+                    los_condition = set_ues_los_condition(ue=ue_array[j], bs=ue_array[i], machine_array=machine_array,
+                                                          link='ue_ue')
                     ue_array[j].is_in_los_ues.append(los_condition)
-                    # print("UE ", ue_array[j].ue_id, " LOS condition with UE: ", ue_array[i].ue_id, " = ",
-                    #       ue_array[j].is_in_los)
+
         # THIS IS A CHECK for the phy_success condition
         for ue in ue_array:
             tx_rx_distance_m = compute_distance_m(tx=ue, rx=bs)
@@ -787,10 +766,7 @@ for seed in range(initial_seed, final_seed + 1):
                     print("UE ", ue.ue_id, " PHY SUCCESS with UE: ", other_ue.ue_id, " = ", success)
                     print("SNR = ", snr_db)
             #
-        # Distribute the RISs in the environment
-        distribution_class.distribute_ris(ris_array=ris_array, factory_length=geometry_class.get_factory_length(),
-                                          factory_width=geometry_class.get_factory_width(),
-                                          factory_height=geometry_class.get_factory_height())
+
 
         print("The max propagation delay is", max_prop_delay_tick)
 
@@ -1068,12 +1044,12 @@ for seed in range(initial_seed, final_seed + 1):
             """
                 Simulation starts for a given simulation time  
             """
+            # Code to plot the factory in 2D or 3D
             # plot_factory(factory_length=geometry_class.get_factory_length(),
             #              factory_width=geometry_class.get_factory_width(),
             #              factory_height=geometry_class.get_factory_height(),
             #              machine_list=machine_array,
             #              ue_list=ue_array,
-            #              ris_list=ris_array,
             #              bs=bs,
             #              distribution_class=distribution_class,
             #              scenario_name=scenario_name,
@@ -1083,7 +1059,6 @@ for seed in range(initial_seed, final_seed + 1):
             #                  factory_height=geometry_class.get_factory_height(),
             #                  machine_list=machine_array,
             #                  ue_list=ue_array,
-            #                  ris_list=ris_array,
             #                  bs=bs,
             #                  distribution_class=distribution_class,
             #                  scenario_name=scenario_name,
@@ -1095,9 +1070,6 @@ for seed in range(initial_seed, final_seed + 1):
             for ue in ue_array:
                 # print("UE ", ue.ue_id, "(", ue.x, "; ", ue.y, "; ", ue.z, ")")
                 d_from_bs = np.sqrt((ue.x - bs.x) ** 2 + (ue.y - bs.y) ** 2 + (ue.z - bs.z) ** 2)
-                # print("d from BS: ", d_from_bs)
-                # ue.is_in_los = set_ues_los_condition_new(ue=ue, bs=bs, machine_array=machine_array)
-                # print("LOS condition: ", ue.is_in_los)
 
                 for other_ue in ue_array:
                     if ue != other_ue:
@@ -1108,650 +1080,579 @@ for seed in range(initial_seed, final_seed + 1):
             while t <= tot_simulation_time_tick:
                 # Mobility disabled
                 # Mobility
-                # copy_simulator_timing_structure = deepcopy(simulator_timing_structure)
-                # if t == next_t_change and t > 0:
-                #     t_change = t
-                #
-                # if mobility_obstacle:
-                #     # Machine movement:
-                #     pilot_x_min = pilot_y_min = 1.25
-                #     pilot_x_max = pilot_y_max = 18.75
-                #     min_x, max_x = machine_array[0].x_center, machine_array[0].x_center
-                #     min_y, max_y = machine_array[0].y_center, machine_array[0].y_center
-                #
-                #     for machine in machine_array:
-                #         if pilot_x_min <= machine.x_center < min_x:
-                #             min_x = machine.x_center
-                #         if pilot_x_max >= machine.x_center > max_x:
-                #             max_x = machine.x_center
-                #         if pilot_y_min <= machine.y_center < min_y:
-                #             min_y = machine.y_center
-                #         if pilot_y_max >= machine.y_center > max_y:
-                #             max_y = machine.y_center
-                #
-                #     for machine in machine_array:
-                #         new_x, new_y = machine.move_machine(machine.x_center, machine.y_center, step_size,
-                #                                             min_x, max_x, min_y, max_y)
-                #         machine.set_coordinates(new_x, new_y, machine.z_center)
-                #         machine = Machine(x_center=new_x, y_center=new_y, z_center=machine.z_center,
-                #                           machine_size=machine.get_machine_size(),
-                #                           max_number_of_ues=machine.get_max_number_of_ues())
-                #
-                # elif mobility_spawn:
-                #     # Just 2 movement check if the tick is before the half
-                #     if t_change < 0.5 * tot_simulation_time_tick:
-                #         machine_array[8].set_coordinates(3.25, machine_array[8].y_center, machine_array[8].z_center)
-                #         machine_array[9].set_coordinates(machine_array[9].x_center, 7.75, machine_array[9].z_center)
-                #         machine_array[10].set_coordinates(16.75, machine_array[10].y_center,
-                #                                           machine_array[10].z_center)
-                #
-                #     elif t_change > 0.5 * tot_simulation_time_tick and t_change < tot_simulation_time_tick:
-                #         machine_array[8].set_coordinates(16.75, machine_array[8].y_center,
-                #                                          machine_array[8].z_center)
-                #         machine_array[9].set_coordinates(machine_array[9].x_center, 12.25,
-                #                                          machine_array[9].z_center)
-                #         machine_array[10].set_coordinates(3.25, machine_array[10].y_center,
-                #                                           machine_array[10].z_center)
-                #
-                #     else:
-                #         machine_array[8].set_coordinates(22, machine_array[8].y_center, machine_array[8].z_center)
-                #         machine_array[9].set_coordinates(machine_array[9].x_center, 22, machine_array[9].z_center)
-                #         machine_array[10].set_coordinates(22, machine_array[10].y_center,
-                #                                           machine_array[10].z_center)
-                #
-                #     machine_array[8] = Machine(x_center=machine_array[8].x_center,
-                #                                y_center=machine_array[8].y_center,
-                #                                z_center=machine_array[8].z_center,
-                #                                machine_size=machine_array[8].get_machine_size(),
-                #                                max_number_of_ues=machine_array[8].get_max_number_of_ues())
-                #
-                #     machine_array[9] = Machine(x_center=machine_array[9].x_center,
-                #                                y_center=machine_array[9].y_center,
-                #                                z_center=machine_array[9].z_center,
-                #                                machine_size=machine_array[9].get_machine_size(),
-                #                                max_number_of_ues=machine_array[9].get_max_number_of_ues())
-                #
-                #     machine_array[10] = Machine(x_center=machine_array[10].x_center,
-                #                                 y_center=machine_array[10].y_center,
-                #                                 z_center=machine_array[10].z_center,
-                #                                 machine_size=machine_array[10].get_machine_size(),
-                #                                 max_number_of_ues=machine_array[10].get_max_number_of_ues())
-                # elif mobility_shuffle:
-                #
-                #     for ue in ue_array:
-                #         for ue_key_ext in simulator_timing_structure.keys():
-                #             if ue_key_ext == f'UE_{ue.get_ue_id()}':
-                #                 # Loop over the DATA receptions from other UEs
-                #                 for ue_key_int in simulator_timing_structure[ue_key_ext]['DATA_RX'].keys():
-                #                     # check the value of the final_state_tick
-                #                     if len(simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int]) > 0:
-                #                         for array_index in range(
-                #                                 len(simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int])):
-                #                             if simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int][
-                #                                 array_index][0] \
-                #                                     != tot_simulation_time_tick + 1 and \
-                #                                     simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int][
-                #                                         array_index][0] != tot_simulation_time_tick + 1:
-                #                                 # print("Old value for UE_KEY_EXT: ", f'UE_{ue.get_ue_id()}')
-                #                                 for other_ue in ue_array:
-                #                                     if ue_key_int == f'UE_{other_ue.get_ue_id()}':
-                #                                         # print("OLD value for UE_KEY_INT: ", f'UE_{other_ue.get_ue_id()}')
-                #                                         # print(" OLD start_tick = ", simulator_timing_structure[ue_key_ext]
-                #                                         # ['DATA_RX'][ue_key_int][array_index][0])
-                #                                         # print("OLD end tick = ", simulator_timing_structure[ue_key_ext]
-                #                                         # ['DATA_RX'][ue_key_int][array_index][1])
-                #
-                #                                         prop_delay_tick = ue.get_prop_delay_to_ue_tick(
-                #                                             other_ue.get_ue_id())
-                #                                         # print("PROP DELAY: ", prop_delay_tick)
-                #
-                #                                         simulator_timing_structure[ue_key_ext]['DATA_RX'][
-                #                                             ue_key_int][
-                #                                             array_index][0] = \
-                #                                             simulator_timing_structure[ue_key_ext]['DATA_RX'][
-                #                                                 ue_key_int][
-                #                                                 array_index][0] - prop_delay_tick
-                #                                         simulator_timing_structure[ue_key_ext]['DATA_RX'][
-                #                                             ue_key_int][
-                #                                             array_index][1] = \
-                #                                             simulator_timing_structure[ue_key_ext]['DATA_RX'][
-                #                                                 ue_key_int][
-                #                                                 array_index][1] - prop_delay_tick
-                #
-                #                                 if ue_key_int == 'BS':
-                #                                     # print("OLD value for BS: ")
-                #                                     # print(" OLD start_tick = ", simulator_timing_structure[ue_key_ext]
-                #                                     # ['DATA_RX'][ue_key_int][array_index][0])
-                #                                     # print("OLD end tick = ", simulator_timing_structure[ue_key_ext]
-                #                                     # ['DATA_RX'][ue_key_int][array_index][1])
-                #
-                #                                     prop_delay_tick = ue.get_prop_delay_to_bs_tick()
-                #                                     # print("PROP DELAY: ", prop_delay_tick)
-                #
-                #                                     simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int][
-                #                                         array_index][0] = \
-                #                                         simulator_timing_structure[ue_key_ext]['DATA_RX'][
-                #                                             ue_key_int][
-                #                                             array_index][0] - prop_delay_tick
-                #                                     simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int][
-                #                                         array_index][1] = \
-                #                                         simulator_timing_structure[ue_key_ext]['DATA_RX'][
-                #                                             ue_key_int][
-                #                                             array_index][1] - prop_delay_tick
-                #
-                #                 for ue_key_int in simulator_timing_structure[ue_key_ext]['ACK_RX'].keys():
-                #                     # check the value of the final_state_tick
-                #                     if len(simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int]) > 0:
-                #                         for array_index in range(
-                #                                 len(simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int])):
-                #                             if simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int][
-                #                                 array_index][0] \
-                #                                     != tot_simulation_time_tick + 1 and \
-                #                                     simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int][
-                #                                         array_index][0] != tot_simulation_time_tick + 1:
-                #                                 # print("Old value for UE_KEY_EXT: ", f'UE_{ue.get_ue_id()}')
-                #                                 for other_ue in ue_array:
-                #                                     if ue_key_int == f'UE_{other_ue.get_ue_id()}':
-                #                                         # print("OLD value for UE_KEY_INT: ", f'UE_{other_ue.get_ue_id()}')
-                #                                         # print(" OLD start_tick = ", simulator_timing_structure[ue_key_ext]
-                #                                         # ['ACK_RX'][ue_key_int][array_index][0])
-                #                                         # print("OLD end tick = ", simulator_timing_structure[ue_key_ext]
-                #                                         # ['ACK_RX'][ue_key_int][array_index][1])
-                #
-                #                                         prop_delay_tick = ue.get_prop_delay_to_ue_tick(
-                #                                             other_ue.get_ue_id())
-                #                                         # print("PROP DELAY: ", prop_delay_tick)
-                #
-                #                                         simulator_timing_structure[ue_key_ext]['ACK_RX'][
-                #                                             ue_key_int][
-                #                                             array_index][0] = \
-                #                                             simulator_timing_structure[ue_key_ext]['ACK_RX'][
-                #                                                 ue_key_int][
-                #                                                 array_index][0] - prop_delay_tick
-                #                                         simulator_timing_structure[ue_key_ext]['ACK_RX'][
-                #                                             ue_key_int][
-                #                                             array_index][1] = \
-                #                                             simulator_timing_structure[ue_key_ext]['ACK_RX'][
-                #                                                 ue_key_int][
-                #                                                 array_index][1] - prop_delay_tick
-                #
-                #     for ue_key_ext in simulator_timing_structure.keys():
-                #         if ue_key_ext == 'BS':
-                #             # Loop over the DATA receptions from other UEs
-                #             for ue_key_int in simulator_timing_structure[ue_key_ext]['DATA_RX'].keys():
-                #                 # check the value of the final_state_tick
-                #                 if len(simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int]) > 0:
-                #                     for array_index in range(
-                #                             len(simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int])):
-                #                         if \
-                #                                 simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int][
-                #                                     array_index][
-                #                                     0] \
-                #                                         != tot_simulation_time_tick + 1 and \
-                #                                         simulator_timing_structure[ue_key_ext]['DATA_RX'][
-                #                                             ue_key_int][
-                #                                             array_index][0] != tot_simulation_time_tick + 1:
-                #                             # print("Old value for BS_KEY_EXT: ")
-                #                             for other_ue in ue_array:
-                #                                 if ue_key_int == f'UE_{other_ue.get_ue_id()}':
-                #                                     # print("OLD value for BS: ")
-                #                                     # print(" OLD start_tick = ", simulator_timing_structure[ue_key_ext]
-                #                                     # ['DATA_RX'][ue_key_int][array_index][0])
-                #                                     # print("OLD end tick = ", simulator_timing_structure[ue_key_ext]
-                #                                     # ['DATA_RX'][ue_key_int][array_index][1])
-                #
-                #                                     prop_delay_tick = other_ue.get_prop_delay_to_bs_tick()
-                #                                     # print("PROP DELAY: ", prop_delay_tick)
-                #
-                #                                     simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int][
-                #                                         array_index][0] = \
-                #                                         simulator_timing_structure[ue_key_ext]['DATA_RX'][
-                #                                             ue_key_int][
-                #                                             array_index][0] - prop_delay_tick
-                #                                     simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int][
-                #                                         array_index][1] = \
-                #                                         simulator_timing_structure[ue_key_ext]['DATA_RX'][
-                #                                             ue_key_int][
-                #                                             array_index][1] - prop_delay_tick
-                #
-                #             for ue_key_int in simulator_timing_structure[ue_key_ext]['ACK_RX'].keys():
-                #                 # check the value of the final_state_tick
-                #                 if len(simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int]) > 0:
-                #                     for array_index in range(
-                #                             len(simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int])):
-                #                         if \
-                #                                 simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int][
-                #                                     array_index][0] \
-                #                                         != tot_simulation_time_tick + 1 and \
-                #                                         simulator_timing_structure[ue_key_ext]['ACK_RX'][
-                #                                             ue_key_int][
-                #                                             array_index][0] != tot_simulation_time_tick + 1:
-                #                             # print("Old value for BS_KEY_EXT: ")
-                #                             for other_ue in ue_array:
-                #                                 if ue_key_int == f'UE_{other_ue.get_ue_id()}':
-                #                                     # print("OLD value for BS: ")
-                #                                     # print(" OLD start_tick = ", simulator_timing_structure[ue_key_ext]
-                #                                     # ['ACK_RX'][ue_key_int][array_index][0])
-                #                                     # print("OLD end tick = ", simulator_timing_structure[ue_key_ext]
-                #                                     # ['ACK_RX'][ue_key_int][array_index][1])
-                #
-                #                                     prop_delay_tick = other_ue.get_prop_delay_to_bs_tick()
-                #                                     # print("PROP DELAY: ", prop_delay_tick)
-                #
-                #                                     simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int][
-                #                                         array_index][0] = \
-                #                                         simulator_timing_structure[ue_key_ext]['ACK_RX'][
-                #                                             ue_key_int][
-                #                                             array_index][0] - prop_delay_tick
-                #                                     simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int][
-                #                                         array_index][1] = \
-                #                                         simulator_timing_structure[ue_key_ext]['ACK_RX'][
-                #                                             ue_key_int][
-                #                                             array_index][1] - prop_delay_tick
-                #
-                #     ###### Random change in UEs coordinates ########
-                #     random.shuffle(ue_coordinates_list)
-                #
-                #     # print(ue_coordinates_list)
-                #     index = 0
-                #     for ue in ue_array:
-                #         ue.set_coordinates(ue_coordinates_list[index][0], ue_coordinates_list[index][1],
-                #                            ue_coordinates_list[index][2])
-                #         copy_ue_coordinates_dict[ue.get_ue_id()].append(ue.get_coordinates().tolist())
-                #
-                #         print("UE ", ue.get_ue_id(), " NEW Coordinates: ", ue.get_coordinates())
-                #
-                #         index += 1
-                #     # plot_scenario_2d(factory_length=geometry_class.get_factory_length(),
-                #     #                  factory_width=geometry_class.get_factory_width(),
-                #     #                  factory_height=geometry_class.get_factory_height(),
-                #     #                  machine_list=machine_array,
-                #     #                  ue_list=ue_array,
-                #     #                  ris_list=ris_array,
-                #     #                  bs=bs,
-                #     #                  distribution_class=distribution_class,
-                #     #                  scenario_name=scenario_name,
-                #     #                  save_file=f'./multi_hop_industrial_simulator/results/plot_{scenario_name}_scenario_2d.png',
-                #     #                  )
-                #     for i in range(0, len(ue_array)):
-                #         # ue_array[i].is_in_los.clear()
-                #         ue_array[i].is_in_los_ues.clear()
-                #
-                #     # Set UE LoS/NLoS condition
-                #     if ue_distribution_type != "Grid":
-                #
-                #         if ue_distribution_type == "Custom":
-                #             set_ues_los_condition_ue_bs(ue_array=ue_array, bs=bs, machine_array=machine_array)
-                #             for i in range(0, len(ue_array)):
-                #                 set_ues_los_condition_ue_ue(ue_array=ue_array, bs=ue_array[i],
-                #                                             machine_array=machine_array,
-                #                                             machine_kind=machine_type)
-                #         elif ue_distribution_type == "Uniform":
-                #             set_ues_los_condition_ue_bs_unif(ue_array=ue_array, bs=bs, machine_array=machine_array)
-                #             for i in range(0, len(ue_array)):
-                #                 set_ues_los_condition_ue_ue_unif(ue_array=ue_array, bs=ue_array[i],
-                #                                                  machine_array=machine_array)
-                #
-                #         check_for_neighbours(ue_array=ue_array, machine_array=machine_array, bs=bs,
-                #                              input_snr_threshold_db=snr_th_db,
-                #                              input_shadowing_sample_index=0, input_thz_channel=thz_channel,
-                #                              input_carrier_frequency_ghz=carrier_frequency_ghz,
-                #                              input_bandwidth_hz=bandwidth_hz,
-                #                              input_apply_fading=apply_fading, input_clutter_density=clutter_density,
-                #                              antenna_gain_model=antenna_gain_model,
-                #                              use_huawei_measurements=use_huawei_measurements,
-                #                              input_average_clutter_height_m=average_machine_height_m)
-                #
-                #         if ue_distribution_type == "Custom":
-                #             set_ues_los_condition_ue_bs(ue_array=ue_array, bs=bs, machine_array=machine_array)
-                #             for i in range(0, len(ue_array)):
-                #                 set_ues_los_condition_ue_ue(ue_array=ue_array, bs=ue_array[i],
-                #                                             machine_array=machine_array,
-                #                                             machine_kind=machine_type)
-                #         elif ue_distribution_type == "Uniform":
-                #             set_ues_los_condition_ue_bs_unif(ue_array=ue_array, bs=bs, machine_array=machine_array)
-                #             for i in range(0, len(ue_array)):
-                #                 set_ues_los_condition_ue_ue_unif(ue_array=ue_array, bs=ue_array[i],
-                #                                                  machine_array=machine_array)
-                #
-                #         compute_propagation_delays(ue_array=ue_array, bs=bs,
-                #                                    input_simulator_tick_duration_s=simulator_tick_duration_s)
-                #
-                #     else:
-                #         for i in range(0, len(ue_array)):
-                #             ue_array[i].is_in_los = set_ues_los_condition_new(ue=ue_array[i], bs=bs,
-                #                                                               machine_array=machine_array,
-                #                                                               link='ue_bs')
-                #             # print("UE: ", ue_array[i].ue_id, " = ", ue_array[i].get_channel_condition_with_bs())
-                #             # print("UE ", ue_array[i].ue_id, " LOS condition with BS: ", ue_array[i].is_in_los)
-                #
-                #         for j in range(0, len(ue_array)):
-                #             for i in range(0, len(ue_array)):
-                #                 los_condition = set_ues_los_condition_new(ue=ue_array[j], bs=ue_array[i],
-                #                                                           machine_array=machine_array,
-                #                                                           link='ue_ue')
-                #                 ue_array[j].is_in_los_ues.append(los_condition)
-                #                 # print("UE ", ue_array[j].ue_id, " LOS condition with UE: ", ue_array[i].ue_id, " = ",
-                #                       # los_condition)
-                #
-                    #     # THIS IS A CHECK for the phy_success condition
-                    # for ue in ue_array:
-                    #     tx_rx_distance_m = compute_distance_m(tx=ue, rx=bs)
-                    #     shadowing_sample_index = 0
-                    #     snr_db = thz_channel.get_3gpp_snr_db(
-                    #         tx=ue, rx=bs,
-                    #         carrier_frequency_ghz=carrier_frequency_ghz,
-                    #         tx_rx_distance_m=tx_rx_distance_m,
-                    #         apply_fading=apply_fading,
-                    #         bandwidth_hz=bandwidth_hz,
-                    #         clutter_density=clutter_density,
-                    #         input_shadowing_sample_index=shadowing_sample_index,
-                    #         antenna_gain_model=antenna_gain_model,
-                    #         use_huawei_measurements=use_huawei_measurements,
-                    #         input_average_clutter_height_m=average_machine_height_m,
-                    #         los_cond='bs_ue')
-                    #     if snr_db > sinr_th_db:
-                    #         success = True
-                    #     else:
-                    #         success = False
-                    #     # print("DISTANCE BS - UE ", ue.get_ue_id(), " = ", tx_rx_distance_m)
-                    #     # if success is True:
-                    #     print("UE ", ue.ue_id, " PHY SUCCESS with BS: ", success)
-                    #     print("SNR = ", snr_db)
-                    # for ue in ue_array:
-                    #     for other_ue in ue_array:
-                    #         if other_ue != ue:
-                    #             tx_rx_distance_m = compute_distance_m(tx=ue, rx=other_ue)
-                    #             # print("DISTANCE UE ", ue.get_ue_id(), " - UE ", other_ue.get_ue_id(), " = ", tx_rx_distance_m)
-                    #             shadowing_sample_index = 0
-                    #             snr_db = thz_channel.get_3gpp_snr_db(
-                    #                 tx=ue, rx=other_ue,
-                    #                 carrier_frequency_ghz=carrier_frequency_ghz,
-                    #                 tx_rx_distance_m=tx_rx_distance_m,
-                    #                 apply_fading=apply_fading,
-                    #                 bandwidth_hz=bandwidth_hz,
-                    #                 clutter_density=clutter_density,
-                    #                 input_shadowing_sample_index=shadowing_sample_index,
-                    #                 antenna_gain_model=antenna_gain_model,
-                    #                 use_huawei_measurements=use_huawei_measurements,
-                    #                 input_average_clutter_height_m=average_machine_height_m,
-                    #                 los_cond='ue_ue')
-                    #             if snr_db > sinr_th_db:
-                    #                 success = True
-                    #             else:
-                    #                 success = False
-                    #
-                    #             # if success is True:
-                    #             print("UE ", ue.ue_id, " PHY SUCCESS with UE: ", other_ue.ue_id, " = ", success)
-                    #             print("SNR = ", snr_db)
-                    # if mobility_shuffle:
-                    #     compute_propagation_delays(ue_array=ue_array, bs=bs,
-                    #                                input_simulator_tick_duration_s=simulator_tick_duration_s)
-                    #
-                    #     for ue in ue_array:
-                    #         for ue_key_ext in simulator_timing_structure.keys():
-                    #             if ue_key_ext == f'UE_{ue.get_ue_id()}':
-                    #                 # Loop over the DATA receptions from other UEs
-                    #                 for ue_key_int in simulator_timing_structure[ue_key_ext]['DATA_RX'].keys():
-                    #                     # check the value of the final_state_tick
-                    #                     if len(simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int]) > 0:
-                    #                         for array_index in range(
-                    #                                 len(simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int])):
-                    #                             if simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int][
-                    #                                 array_index][0] \
-                    #                                     != tot_simulation_time_tick + 1 and \
-                    #                                     simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int][
-                    #                                         array_index][0] != tot_simulation_time_tick + 1:
-                    #                                 # print("NEW value for UE_KEY_EXT: ", f'UE_{ue.get_ue_id()}')
-                    #                                 for other_ue in ue_array:
-                    #                                     if ue_key_int == f'UE_{other_ue.get_ue_id()}':
-                    #                                         # print("NEW value for UE_KEY_INT: ", f'UE_{other_ue.get_ue_id()}')
-                    #
-                    #                                         prop_delay_tick = ue.get_prop_delay_to_ue_tick(
-                    #                                             other_ue.get_ue_id())
-                    #                                         # print("PROP DELAY: ", prop_delay_tick)
-                    #
-                    #                                         simulator_timing_structure[ue_key_ext]['DATA_RX'][
-                    #                                             ue_key_int][
-                    #                                             array_index][0] = \
-                    #                                             simulator_timing_structure[ue_key_ext]['DATA_RX'][
-                    #                                                 ue_key_int][
-                    #                                                 array_index][0] + prop_delay_tick
-                    #                                         simulator_timing_structure[ue_key_ext]['DATA_RX'][
-                    #                                             ue_key_int][
-                    #                                             array_index][1] = \
-                    #                                             simulator_timing_structure[ue_key_ext]['DATA_RX'][
-                    #                                                 ue_key_int][
-                    #                                                 array_index][1] + prop_delay_tick
-                    #
-                    #                                         if simulator_timing_structure[ue_key_ext]['DATA_RX'][
-                    #                                             ue_key_int][
-                    #                                             array_index][0] < next_t_change:
-                    #                                             remove_item_in_timing_structure(
-                    #                                                 input_simulator_timing_structure=copy_simulator_timing_structure,
-                    #                                                 input_rx_key=f'UE_{ue.get_ue_id()}',
-                    #                                                 input_type_key='DATA_RX',
-                    #                                                 input_tx_key=f'UE_{other_ue.get_ue_id()}')
-                    #
-                    #                                         else:
-                    #                                             if enable_print:
-                    #                                                 print(" NEW start_tick = ",
-                    #                                                       simulator_timing_structure[ue_key_ext]
-                    #                                                       ['DATA_RX'][ue_key_int][array_index][0])
-                    #                                                 print("NEW end tick = ",
-                    #                                                       simulator_timing_structure[ue_key_ext]
-                    #                                                       ['DATA_RX'][ue_key_int][array_index][1])
-                    #
-                    #                                 if ue_key_int == 'BS':
-                    #                                     # print("NEW value for BS: ")
-                    #
-                    #                                     prop_delay_tick = ue.get_prop_delay_to_bs_tick()
-                    #                                     # print("PROP DELAY: ", prop_delay_tick)
-                    #
-                    #                                     simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int][
-                    #                                         array_index][0] = \
-                    #                                         simulator_timing_structure[ue_key_ext]['DATA_RX'][
-                    #                                             ue_key_int][
-                    #                                             array_index][0] + prop_delay_tick
-                    #                                     simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int][
-                    #                                         array_index][1] = \
-                    #                                         simulator_timing_structure[ue_key_ext]['DATA_RX'][
-                    #                                             ue_key_int][
-                    #                                             array_index][1] + prop_delay_tick
-                    #
-                    #                                     if \
-                    #                                             simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int][
-                    #                                                 array_index][0] < next_t_change:
-                    #                                         remove_item_in_timing_structure(
-                    #                                             input_simulator_timing_structure=copy_simulator_timing_structure,
-                    #                                             input_rx_key=f'UE_{ue.get_ue_id()}',
-                    #                                             input_type_key='DATA_RX',
-                    #                                             input_tx_key='BS')
-                    #                                     else:
-                    #                                         if enable_print:
-                    #                                             print(" NEW start_tick = ",
-                    #                                                   simulator_timing_structure[ue_key_ext]
-                    #                                                   ['DATA_RX'][ue_key_int][array_index][0])
-                    #                                             print("NEW end tick = ",
-                    #                                                   simulator_timing_structure[ue_key_ext]
-                    #                                                   ['DATA_RX'][ue_key_int][array_index][1])
-                    #
-                    #                 for ue_key_int in simulator_timing_structure[ue_key_ext]['ACK_RX'].keys():
-                    #                     # check the value of the final_state_tick
-                    #                     if len(simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int]) > 0:
-                    #                         for array_index in range(
-                    #                                 len(simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int])):
-                    #                             if simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int][
-                    #                                 array_index][0] \
-                    #                                     != tot_simulation_time_tick + 1 and \
-                    #                                     simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int][
-                    #                                         array_index][0] != tot_simulation_time_tick + 1:
-                    #                                 # print("NEW value for UE_KEY_EXT: ", f'UE_{ue.get_ue_id()}')
-                    #                                 for other_ue in ue_array:
-                    #                                     if ue_key_int == f'UE_{other_ue.get_ue_id()}':
-                    #                                         # print("NEW value for UE_KEY_INT: ", f'UE_{other_ue.get_ue_id()}')
-                    #
-                    #                                         prop_delay_tick = ue.get_prop_delay_to_ue_tick(
-                    #                                             other_ue.get_ue_id())
-                    #                                         # print("PROP DELAY: ", prop_delay_tick)
-                    #
-                    #                                         simulator_timing_structure[ue_key_ext]['ACK_RX'][
-                    #                                             ue_key_int][
-                    #                                             array_index][0] = \
-                    #                                             simulator_timing_structure[ue_key_ext]['ACK_RX'][
-                    #                                                 ue_key_int][
-                    #                                                 array_index][0] + prop_delay_tick
-                    #                                         simulator_timing_structure[ue_key_ext]['ACK_RX'][
-                    #                                             ue_key_int][
-                    #                                             array_index][1] = \
-                    #                                             simulator_timing_structure[ue_key_ext]['ACK_RX'][
-                    #                                                 ue_key_int][
-                    #                                                 array_index][1] + prop_delay_tick
-                    #
-                    #                                         if simulator_timing_structure[ue_key_ext]['ACK_RX'][
-                    #                                             ue_key_int][
-                    #                                             array_index][0] < next_t_change:
-                    #                                             remove_item_in_timing_structure(
-                    #                                                 input_simulator_timing_structure=copy_simulator_timing_structure,
-                    #                                                 input_rx_key=f'UE_{ue.get_ue_id()}',
-                    #                                                 input_type_key='ACK_RX',
-                    #                                                 input_tx_key=f'UE_{other_ue.get_ue_id()}')
-                    #                                         else:
-                    #                                             if enable_print:
-                    #                                                 print(" NEW start_tick = ",
-                    #                                                       simulator_timing_structure[ue_key_ext]
-                    #                                                       ['ACK_RX'][ue_key_int][array_index][0])
-                    #                                                 print("NEW end tick = ",
-                    #                                                       simulator_timing_structure[ue_key_ext]
-                    #                                                       ['ACK_RX'][ue_key_int][array_index][1])
-                    #
-                    #                                 if ue_key_int == 'BS':
-                    #                                     # print("NEW value for BS: ")
-                    #
-                    #                                     prop_delay_tick = ue.get_prop_delay_to_bs_tick()
-                    #                                     # print("PROP DELAY: ", prop_delay_tick)
-                    #
-                    #                                     simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int][
-                    #                                         array_index][0] = \
-                    #                                         simulator_timing_structure[ue_key_ext]['ACK_RX'][
-                    #                                             ue_key_int][
-                    #                                             array_index][0] + prop_delay_tick
-                    #                                     simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int][
-                    #                                         array_index][1] = \
-                    #                                         simulator_timing_structure[ue_key_ext]['ACK_RX'][
-                    #                                             ue_key_int][
-                    #                                             array_index][1] + prop_delay_tick
-                    #
-                    #                                     if simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int][
-                    #                                         array_index][0] < next_t_change:
-                    #                                         remove_item_in_timing_structure(
-                    #                                             input_simulator_timing_structure=copy_simulator_timing_structure,
-                    #                                             input_rx_key=f'UE_{ue.get_ue_id()}',
-                    #                                             input_type_key='ACK_RX',
-                    #                                             input_tx_key='BS')
-                    #                                     else:
-                    #                                         if enable_print:
-                    #                                             print(" NEW start_tick = ",
-                    #                                                   simulator_timing_structure[ue_key_ext]
-                    #                                                   ['ACK_RX'][ue_key_int][array_index][0])
-                    #                                             print("NEW end tick = ",
-                    #                                                   simulator_timing_structure[ue_key_ext]
-                    #                                                   ['ACK_RX'][ue_key_int][array_index][1])
-                    #     for ue_key_ext in simulator_timing_structure.keys():
-                    #         if ue_key_ext == 'BS':
-                    #             # Loop over the DATA receptions from other UEs
-                    #             for ue_key_int in simulator_timing_structure[ue_key_ext]['DATA_RX'].keys():
-                    #                 # check the value of the final_state_tick
-                    #                 if len(simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int]) > 0:
-                    #                     for array_index in range(
-                    #                             len(simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int])):
-                    #                         if \
-                    #                                 simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int][array_index][
-                    #                                     0] \
-                    #                                         != tot_simulation_time_tick + 1 and \
-                    #                                         simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int][
-                    #                                             array_index][0] != tot_simulation_time_tick + 1:
-                    #                             # print("NEW value for BS_KEY_EXT: ")
-                    #                             for other_ue in ue_array:
-                    #                                 if ue_key_int == f'UE_{other_ue.get_ue_id()}':
-                    #                                     # print("NEW value for BS: ")
-                    #
-                    #                                     prop_delay_tick = other_ue.get_prop_delay_to_bs_tick()
-                    #                                     # print("PROP DELAY: ", prop_delay_tick)
-                    #
-                    #                                     simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int][
-                    #                                         array_index][0] = \
-                    #                                         simulator_timing_structure[ue_key_ext]['DATA_RX'][
-                    #                                             ue_key_int][
-                    #                                             array_index][0] + prop_delay_tick
-                    #                                     simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int][
-                    #                                         array_index][1] = \
-                    #                                         simulator_timing_structure[ue_key_ext]['DATA_RX'][
-                    #                                             ue_key_int][
-                    #                                             array_index][1] + prop_delay_tick
-                    #                                     if \
-                    #                                             simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int][
-                    #                                                 array_index][0] < next_t_change:
-                    #                                         remove_item_in_timing_structure(
-                    #                                             input_simulator_timing_structure=copy_simulator_timing_structure,
-                    #                                             input_rx_key='BS',
-                    #                                             input_type_key='DATA_RX',
-                    #                                             input_tx_key=f'UE_{other_ue.get_ue_id()}')
-                    #                                     else:
-                    #                                         if enable_print:
-                    #                                             print(" NEW start_tick = ",
-                    #                                                   simulator_timing_structure[ue_key_ext]
-                    #                                                   ['DATA_RX'][ue_key_int][array_index][0])
-                    #                                             print("NEW end tick = ",
-                    #                                                   simulator_timing_structure[ue_key_ext]
-                    #                                                   ['DATA_RX'][ue_key_int][array_index][1])
-                    #
-                    #             for ue_key_int in simulator_timing_structure[ue_key_ext]['ACK_RX'].keys():
-                    #                 # check the value of the final_state_tick
-                    #                 if len(simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int]) > 0:
-                    #                     for array_index in range(
-                    #                             len(simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int])):
-                    #                         if \
-                    #                                 simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int][array_index][0] \
-                    #                                         != tot_simulation_time_tick + 1 and \
-                    #                                         simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int][
-                    #                                             array_index][0] != tot_simulation_time_tick + 1:
-                    #                             # print("NEW value for BS_KEY_EXT: ")
-                    #                             for other_ue in ue_array:
-                    #                                 if ue_key_int == f'UE_{other_ue.get_ue_id()}':
-                    #                                     # print("NEW value for BS: ")
-                    #
-                    #                                     prop_delay_tick = other_ue.get_prop_delay_to_bs_tick()
-                    #                                     # print("PROP DELAY: ", prop_delay_tick)
-                    #
-                    #                                     simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int][
-                    #                                         array_index][0] = \
-                    #                                         simulator_timing_structure[ue_key_ext]['ACK_RX'][
-                    #                                             ue_key_int][
-                    #                                             array_index][0] + prop_delay_tick
-                    #                                     simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int][
-                    #                                         array_index][1] = \
-                    #                                         simulator_timing_structure[ue_key_ext]['ACK_RX'][
-                    #                                             ue_key_int][
-                    #                                             array_index][1] + prop_delay_tick
-                    #
-                    #                                     if simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int][
-                    #                                         array_index][0] < next_t_change:
-                    #                                         remove_item_in_timing_structure(
-                    #                                             input_simulator_timing_structure=copy_simulator_timing_structure,
-                    #                                             input_rx_key='BS',
-                    #                                             input_type_key='ACK_RX',
-                    #                                             input_tx_key=f'UE_{other_ue.get_ue_id()}')
-                    #                                     else:
-                    #                                         if enable_print:
-                    #                                             print(" NEW start_tick = ",
-                    #                                                   simulator_timing_structure[ue_key_ext]
-                    #                                                   ['ACK_RX'][ue_key_int][array_index][0])
-                    #                                             print("NEW end tick = ",
-                    #                                                   simulator_timing_structure[ue_key_ext]
-                    #                                                   ['ACK_RX'][ue_key_int][array_index][1])
-                    #
-                    #     simulator_timing_structure = deepcopy(copy_simulator_timing_structure)
+                copy_simulator_timing_structure = deepcopy(simulator_timing_structure)
+                if t == next_t_change and t > 0:
+                    t_change = t
+
+                if mobility_obstacle:
+                    # Machine movement:
+                    pilot_x_min = pilot_y_min = 1.25
+                    pilot_x_max = pilot_y_max = 18.75
+                    min_x, max_x = machine_array[0].x_center, machine_array[0].x_center
+                    min_y, max_y = machine_array[0].y_center, machine_array[0].y_center
+
+                    for machine in machine_array:
+                        if pilot_x_min <= machine.x_center < min_x:
+                            min_x = machine.x_center
+                        if pilot_x_max >= machine.x_center > max_x:
+                            max_x = machine.x_center
+                        if pilot_y_min <= machine.y_center < min_y:
+                            min_y = machine.y_center
+                        if pilot_y_max >= machine.y_center > max_y:
+                            max_y = machine.y_center
+
+                    for machine in machine_array:
+                        new_x, new_y = machine.move_machine(machine.x_center, machine.y_center, step_size,
+                                                            min_x, max_x, min_y, max_y)
+                        machine.set_coordinates(new_x, new_y, machine.z_center)
+                        machine = Machine(x_center=new_x, y_center=new_y, z_center=machine.z_center,
+                                          machine_size=machine.get_machine_size(),
+                                          max_number_of_ues=machine.get_max_number_of_ues())
+
+                elif mobility_spawn:
+                    # Just 2 movement check if the tick is before the half
+                    if t_change < 0.5 * tot_simulation_time_tick:
+                        machine_array[8].set_coordinates(3.25, machine_array[8].y_center, machine_array[8].z_center)
+                        machine_array[9].set_coordinates(machine_array[9].x_center, 7.75, machine_array[9].z_center)
+                        machine_array[10].set_coordinates(16.75, machine_array[10].y_center,
+                                                          machine_array[10].z_center)
+
+                    elif t_change > 0.5 * tot_simulation_time_tick and t_change < tot_simulation_time_tick:
+                        machine_array[8].set_coordinates(16.75, machine_array[8].y_center,
+                                                         machine_array[8].z_center)
+                        machine_array[9].set_coordinates(machine_array[9].x_center, 12.25,
+                                                         machine_array[9].z_center)
+                        machine_array[10].set_coordinates(3.25, machine_array[10].y_center,
+                                                          machine_array[10].z_center)
+
+                    else:
+                        machine_array[8].set_coordinates(22, machine_array[8].y_center, machine_array[8].z_center)
+                        machine_array[9].set_coordinates(machine_array[9].x_center, 22, machine_array[9].z_center)
+                        machine_array[10].set_coordinates(22, machine_array[10].y_center,
+                                                          machine_array[10].z_center)
+
+                    machine_array[8] = Machine(x_center=machine_array[8].x_center,
+                                               y_center=machine_array[8].y_center,
+                                               z_center=machine_array[8].z_center,
+                                               machine_size=machine_array[8].get_machine_size(),
+                                               max_number_of_ues=machine_array[8].get_max_number_of_ues())
+
+                    machine_array[9] = Machine(x_center=machine_array[9].x_center,
+                                               y_center=machine_array[9].y_center,
+                                               z_center=machine_array[9].z_center,
+                                               machine_size=machine_array[9].get_machine_size(),
+                                               max_number_of_ues=machine_array[9].get_max_number_of_ues())
+
+                    machine_array[10] = Machine(x_center=machine_array[10].x_center,
+                                                y_center=machine_array[10].y_center,
+                                                z_center=machine_array[10].z_center,
+                                                machine_size=machine_array[10].get_machine_size(),
+                                                max_number_of_ues=machine_array[10].get_max_number_of_ues())
+                elif mobility_shuffle:
+
+                    for ue in ue_array:
+                        for ue_key_ext in simulator_timing_structure.keys():
+                            if ue_key_ext == f'UE_{ue.get_ue_id()}':
+                                # Loop over the DATA receptions from other UEs
+                                for ue_key_int in simulator_timing_structure[ue_key_ext]['DATA_RX'].keys():
+                                    # check the value of the final_state_tick
+                                    if len(simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int]) > 0:
+                                        for array_index in range(
+                                                len(simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int])):
+                                            if simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int][
+                                                array_index][0] \
+                                                    != tot_simulation_time_tick + 1 and \
+                                                    simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int][
+                                                        array_index][0] != tot_simulation_time_tick + 1:
+                                                # print("Old value for UE_KEY_EXT: ", f'UE_{ue.get_ue_id()}')
+                                                for other_ue in ue_array:
+                                                    if ue_key_int == f'UE_{other_ue.get_ue_id()}':
+                                                        # print("OLD value for UE_KEY_INT: ", f'UE_{other_ue.get_ue_id()}')
+                                                        # print(" OLD start_tick = ", simulator_timing_structure[ue_key_ext]
+                                                        # ['DATA_RX'][ue_key_int][array_index][0])
+                                                        # print("OLD end tick = ", simulator_timing_structure[ue_key_ext]
+                                                        # ['DATA_RX'][ue_key_int][array_index][1])
+
+                                                        prop_delay_tick = ue.get_prop_delay_to_ue_tick(
+                                                            other_ue.get_ue_id())
+                                                        # print("PROP DELAY: ", prop_delay_tick)
+
+                                                        simulator_timing_structure[ue_key_ext]['DATA_RX'][
+                                                            ue_key_int][
+                                                            array_index][0] = \
+                                                            simulator_timing_structure[ue_key_ext]['DATA_RX'][
+                                                                ue_key_int][
+                                                                array_index][0] - prop_delay_tick
+                                                        simulator_timing_structure[ue_key_ext]['DATA_RX'][
+                                                            ue_key_int][
+                                                            array_index][1] = \
+                                                            simulator_timing_structure[ue_key_ext]['DATA_RX'][
+                                                                ue_key_int][
+                                                                array_index][1] - prop_delay_tick
+
+                                                if ue_key_int == 'BS':
+                                                    # print("OLD value for BS: ")
+                                                    # print(" OLD start_tick = ", simulator_timing_structure[ue_key_ext]
+                                                    # ['DATA_RX'][ue_key_int][array_index][0])
+                                                    # print("OLD end tick = ", simulator_timing_structure[ue_key_ext]
+                                                    # ['DATA_RX'][ue_key_int][array_index][1])
+
+                                                    prop_delay_tick = ue.get_prop_delay_to_bs_tick()
+                                                    # print("PROP DELAY: ", prop_delay_tick)
+
+                                                    simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int][
+                                                        array_index][0] = \
+                                                        simulator_timing_structure[ue_key_ext]['DATA_RX'][
+                                                            ue_key_int][
+                                                            array_index][0] - prop_delay_tick
+                                                    simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int][
+                                                        array_index][1] = \
+                                                        simulator_timing_structure[ue_key_ext]['DATA_RX'][
+                                                            ue_key_int][
+                                                            array_index][1] - prop_delay_tick
+
+                                for ue_key_int in simulator_timing_structure[ue_key_ext]['ACK_RX'].keys():
+                                    # check the value of the final_state_tick
+                                    if len(simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int]) > 0:
+                                        for array_index in range(
+                                                len(simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int])):
+                                            if simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int][
+                                                array_index][0] \
+                                                    != tot_simulation_time_tick + 1 and \
+                                                    simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int][
+                                                        array_index][0] != tot_simulation_time_tick + 1:
+                                                # print("Old value for UE_KEY_EXT: ", f'UE_{ue.get_ue_id()}')
+                                                for other_ue in ue_array:
+                                                    if ue_key_int == f'UE_{other_ue.get_ue_id()}':
+                                                        # print("OLD value for UE_KEY_INT: ", f'UE_{other_ue.get_ue_id()}')
+                                                        # print(" OLD start_tick = ", simulator_timing_structure[ue_key_ext]
+                                                        # ['ACK_RX'][ue_key_int][array_index][0])
+                                                        # print("OLD end tick = ", simulator_timing_structure[ue_key_ext]
+                                                        # ['ACK_RX'][ue_key_int][array_index][1])
+
+                                                        prop_delay_tick = ue.get_prop_delay_to_ue_tick(
+                                                            other_ue.get_ue_id())
+                                                        # print("PROP DELAY: ", prop_delay_tick)
+
+                                                        simulator_timing_structure[ue_key_ext]['ACK_RX'][
+                                                            ue_key_int][
+                                                            array_index][0] = \
+                                                            simulator_timing_structure[ue_key_ext]['ACK_RX'][
+                                                                ue_key_int][
+                                                                array_index][0] - prop_delay_tick
+                                                        simulator_timing_structure[ue_key_ext]['ACK_RX'][
+                                                            ue_key_int][
+                                                            array_index][1] = \
+                                                            simulator_timing_structure[ue_key_ext]['ACK_RX'][
+                                                                ue_key_int][
+                                                                array_index][1] - prop_delay_tick
+
+                    for ue_key_ext in simulator_timing_structure.keys():
+                        if ue_key_ext == 'BS':
+                            # Loop over the DATA receptions from other UEs
+                            for ue_key_int in simulator_timing_structure[ue_key_ext]['DATA_RX'].keys():
+                                # check the value of the final_state_tick
+                                if len(simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int]) > 0:
+                                    for array_index in range(
+                                            len(simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int])):
+                                        if \
+                                                simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int][
+                                                    array_index][
+                                                    0] \
+                                                        != tot_simulation_time_tick + 1 and \
+                                                        simulator_timing_structure[ue_key_ext]['DATA_RX'][
+                                                            ue_key_int][
+                                                            array_index][0] != tot_simulation_time_tick + 1:
+                                            # print("Old value for BS_KEY_EXT: ")
+                                            for other_ue in ue_array:
+                                                if ue_key_int == f'UE_{other_ue.get_ue_id()}':
+                                                    # print("OLD value for BS: ")
+                                                    # print(" OLD start_tick = ", simulator_timing_structure[ue_key_ext]
+                                                    # ['DATA_RX'][ue_key_int][array_index][0])
+                                                    # print("OLD end tick = ", simulator_timing_structure[ue_key_ext]
+                                                    # ['DATA_RX'][ue_key_int][array_index][1])
+
+                                                    prop_delay_tick = other_ue.get_prop_delay_to_bs_tick()
+                                                    # print("PROP DELAY: ", prop_delay_tick)
+
+                                                    simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int][
+                                                        array_index][0] = \
+                                                        simulator_timing_structure[ue_key_ext]['DATA_RX'][
+                                                            ue_key_int][
+                                                            array_index][0] - prop_delay_tick
+                                                    simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int][
+                                                        array_index][1] = \
+                                                        simulator_timing_structure[ue_key_ext]['DATA_RX'][
+                                                            ue_key_int][
+                                                            array_index][1] - prop_delay_tick
+
+                            for ue_key_int in simulator_timing_structure[ue_key_ext]['ACK_RX'].keys():
+                                # check the value of the final_state_tick
+                                if len(simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int]) > 0:
+                                    for array_index in range(
+                                            len(simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int])):
+                                        if \
+                                                simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int][
+                                                    array_index][0] \
+                                                        != tot_simulation_time_tick + 1 and \
+                                                        simulator_timing_structure[ue_key_ext]['ACK_RX'][
+                                                            ue_key_int][
+                                                            array_index][0] != tot_simulation_time_tick + 1:
+                                            # print("Old value for BS_KEY_EXT: ")
+                                            for other_ue in ue_array:
+                                                if ue_key_int == f'UE_{other_ue.get_ue_id()}':
+                                                    # print("OLD value for BS: ")
+                                                    # print(" OLD start_tick = ", simulator_timing_structure[ue_key_ext]
+                                                    # ['ACK_RX'][ue_key_int][array_index][0])
+                                                    # print("OLD end tick = ", simulator_timing_structure[ue_key_ext]
+                                                    # ['ACK_RX'][ue_key_int][array_index][1])
+
+                                                    prop_delay_tick = other_ue.get_prop_delay_to_bs_tick()
+                                                    # print("PROP DELAY: ", prop_delay_tick)
+
+                                                    simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int][
+                                                        array_index][0] = \
+                                                        simulator_timing_structure[ue_key_ext]['ACK_RX'][
+                                                            ue_key_int][
+                                                            array_index][0] - prop_delay_tick
+                                                    simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int][
+                                                        array_index][1] = \
+                                                        simulator_timing_structure[ue_key_ext]['ACK_RX'][
+                                                            ue_key_int][
+                                                            array_index][1] - prop_delay_tick
+
+                    ###### Random change in UEs coordinates ########
+                    random.shuffle(ue_coordinates_list)
+
+                    # print(ue_coordinates_list)
+                    index = 0
+                    for ue in ue_array:
+                        ue.set_coordinates(ue_coordinates_list[index][0], ue_coordinates_list[index][1],
+                                           ue_coordinates_list[index][2])
+                        copy_ue_coordinates_dict[ue.get_ue_id()].append(ue.get_coordinates().tolist())
+
+                        print("UE ", ue.get_ue_id(), " NEW Coordinates: ", ue.get_coordinates())
+
+                        index += 1
+
+                    for i in range(0, len(ue_array)):
+                        # ue_array[i].is_in_los.clear()
+                        ue_array[i].is_in_los_ues.clear()
+
+                    # Set UE LoS/NLoS condition
+                    if ue_distribution_type != "Grid":
+
+                        for i in range(0, len(ue_array)):
+                            ue_array[i].is_in_los = set_ues_los_condition(ue=ue_array[i], bs=bs,
+                                                                          machine_array=machine_array,
+                                                                          link='ue_bs')
+
+                        for j in range(0, len(ue_array)):
+                            for i in range(0, len(ue_array)):
+                                los_condition = set_ues_los_condition(ue=ue_array[j], bs=ue_array[i],
+                                                                      machine_array=machine_array,
+                                                                      link='ue_ue')
+                                ue_array[j].is_in_los_ues.append(los_condition)
+
+                        # Method to ensure that in case of UEs' Uniform distribution they can have at least one neighbour
+                        # to reach the BS
+
+                        check_for_neighbours(ue_array=ue_array, machine_array=machine_array, bs=bs,
+                                             input_snr_threshold_db=sinr_th_db,
+                                             input_shadowing_sample_index=0, input_thz_channel=thz_channel,
+                                             input_carrier_frequency_ghz=carrier_frequency_ghz,
+                                             input_bandwidth_hz=bandwidth_hz,
+                                             input_apply_fading=apply_fading, input_clutter_density=clutter_density,
+                                             antenna_gain_model=antenna_gain_model,
+                                             use_huawei_measurements=use_huawei_measurements,
+                                             input_average_clutter_height_m=average_machine_height_m)
+
+                        compute_propagation_delays(ue_array=ue_array, bs=bs,
+                                                   input_simulator_tick_duration_s=simulator_tick_duration_s)
+
+                    else:
+
+                        for i in range(0, len(ue_array)):
+                            ue_array[i].is_in_los = set_ues_los_condition(ue=ue_array[i], bs=bs,
+                                                                          machine_array=machine_array,
+                                                                          link='ue_bs')
+
+                        for j in range(0, len(ue_array)):
+                            for i in range(0, len(ue_array)):
+                                los_condition = set_ues_los_condition(ue=ue_array[j], bs=ue_array[i],
+                                                                      machine_array=machine_array,
+                                                                      link='ue_ue')
+                                ue_array[j].is_in_los_ues.append(los_condition)
+
+
+                    if mobility_shuffle:
+                        compute_propagation_delays(ue_array=ue_array, bs=bs,
+                                                   input_simulator_tick_duration_s=simulator_tick_duration_s)
+
+                        for ue in ue_array:
+                            for ue_key_ext in simulator_timing_structure.keys():
+                                if ue_key_ext == f'UE_{ue.get_ue_id()}':
+                                    # Loop over the DATA receptions from other UEs
+                                    for ue_key_int in simulator_timing_structure[ue_key_ext]['DATA_RX'].keys():
+                                        # check the value of the final_state_tick
+                                        if len(simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int]) > 0:
+                                            for array_index in range(
+                                                    len(simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int])):
+                                                if simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int][
+                                                    array_index][0] \
+                                                        != tot_simulation_time_tick + 1 and \
+                                                        simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int][
+                                                            array_index][0] != tot_simulation_time_tick + 1:
+                                                    # print("NEW value for UE_KEY_EXT: ", f'UE_{ue.get_ue_id()}')
+                                                    for other_ue in ue_array:
+                                                        if ue_key_int == f'UE_{other_ue.get_ue_id()}':
+                                                            # print("NEW value for UE_KEY_INT: ", f'UE_{other_ue.get_ue_id()}')
+
+                                                            prop_delay_tick = ue.get_prop_delay_to_ue_tick(
+                                                                other_ue.get_ue_id())
+                                                            # print("PROP DELAY: ", prop_delay_tick)
+
+                                                            simulator_timing_structure[ue_key_ext]['DATA_RX'][
+                                                                ue_key_int][
+                                                                array_index][0] = \
+                                                                simulator_timing_structure[ue_key_ext]['DATA_RX'][
+                                                                    ue_key_int][
+                                                                    array_index][0] + prop_delay_tick
+                                                            simulator_timing_structure[ue_key_ext]['DATA_RX'][
+                                                                ue_key_int][
+                                                                array_index][1] = \
+                                                                simulator_timing_structure[ue_key_ext]['DATA_RX'][
+                                                                    ue_key_int][
+                                                                    array_index][1] + prop_delay_tick
+
+                                                            if simulator_timing_structure[ue_key_ext]['DATA_RX'][
+                                                                ue_key_int][
+                                                                array_index][0] < next_t_change:
+                                                                remove_item_in_timing_structure(
+                                                                    input_simulator_timing_structure=copy_simulator_timing_structure,
+                                                                    input_rx_key=f'UE_{ue.get_ue_id()}',
+                                                                    input_type_key='DATA_RX',
+                                                                    input_tx_key=f'UE_{other_ue.get_ue_id()}')
+
+                                                            else:
+                                                                if enable_print:
+                                                                    print(" NEW start_tick = ",
+                                                                          simulator_timing_structure[ue_key_ext]
+                                                                          ['DATA_RX'][ue_key_int][array_index][0])
+                                                                    print("NEW end tick = ",
+                                                                          simulator_timing_structure[ue_key_ext]
+                                                                          ['DATA_RX'][ue_key_int][array_index][1])
+
+                                                    if ue_key_int == 'BS':
+                                                        # print("NEW value for BS: ")
+
+                                                        prop_delay_tick = ue.get_prop_delay_to_bs_tick()
+                                                        # print("PROP DELAY: ", prop_delay_tick)
+
+                                                        simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int][
+                                                            array_index][0] = \
+                                                            simulator_timing_structure[ue_key_ext]['DATA_RX'][
+                                                                ue_key_int][
+                                                                array_index][0] + prop_delay_tick
+                                                        simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int][
+                                                            array_index][1] = \
+                                                            simulator_timing_structure[ue_key_ext]['DATA_RX'][
+                                                                ue_key_int][
+                                                                array_index][1] + prop_delay_tick
+
+                                                        if \
+                                                                simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int][
+                                                                    array_index][0] < next_t_change:
+                                                            remove_item_in_timing_structure(
+                                                                input_simulator_timing_structure=copy_simulator_timing_structure,
+                                                                input_rx_key=f'UE_{ue.get_ue_id()}',
+                                                                input_type_key='DATA_RX',
+                                                                input_tx_key='BS')
+                                                        else:
+                                                            if enable_print:
+                                                                print(" NEW start_tick = ",
+                                                                      simulator_timing_structure[ue_key_ext]
+                                                                      ['DATA_RX'][ue_key_int][array_index][0])
+                                                                print("NEW end tick = ",
+                                                                      simulator_timing_structure[ue_key_ext]
+                                                                      ['DATA_RX'][ue_key_int][array_index][1])
+
+                                    for ue_key_int in simulator_timing_structure[ue_key_ext]['ACK_RX'].keys():
+                                        # check the value of the final_state_tick
+                                        if len(simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int]) > 0:
+                                            for array_index in range(
+                                                    len(simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int])):
+                                                if simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int][
+                                                    array_index][0] \
+                                                        != tot_simulation_time_tick + 1 and \
+                                                        simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int][
+                                                            array_index][0] != tot_simulation_time_tick + 1:
+                                                    # print("NEW value for UE_KEY_EXT: ", f'UE_{ue.get_ue_id()}')
+                                                    for other_ue in ue_array:
+                                                        if ue_key_int == f'UE_{other_ue.get_ue_id()}':
+                                                            # print("NEW value for UE_KEY_INT: ", f'UE_{other_ue.get_ue_id()}')
+
+                                                            prop_delay_tick = ue.get_prop_delay_to_ue_tick(
+                                                                other_ue.get_ue_id())
+                                                            # print("PROP DELAY: ", prop_delay_tick)
+
+                                                            simulator_timing_structure[ue_key_ext]['ACK_RX'][
+                                                                ue_key_int][
+                                                                array_index][0] = \
+                                                                simulator_timing_structure[ue_key_ext]['ACK_RX'][
+                                                                    ue_key_int][
+                                                                    array_index][0] + prop_delay_tick
+                                                            simulator_timing_structure[ue_key_ext]['ACK_RX'][
+                                                                ue_key_int][
+                                                                array_index][1] = \
+                                                                simulator_timing_structure[ue_key_ext]['ACK_RX'][
+                                                                    ue_key_int][
+                                                                    array_index][1] + prop_delay_tick
+
+                                                            if simulator_timing_structure[ue_key_ext]['ACK_RX'][
+                                                                ue_key_int][
+                                                                array_index][0] < next_t_change:
+                                                                remove_item_in_timing_structure(
+                                                                    input_simulator_timing_structure=copy_simulator_timing_structure,
+                                                                    input_rx_key=f'UE_{ue.get_ue_id()}',
+                                                                    input_type_key='ACK_RX',
+                                                                    input_tx_key=f'UE_{other_ue.get_ue_id()}')
+                                                            else:
+                                                                if enable_print:
+                                                                    print(" NEW start_tick = ",
+                                                                          simulator_timing_structure[ue_key_ext]
+                                                                          ['ACK_RX'][ue_key_int][array_index][0])
+                                                                    print("NEW end tick = ",
+                                                                          simulator_timing_structure[ue_key_ext]
+                                                                          ['ACK_RX'][ue_key_int][array_index][1])
+
+                                                    if ue_key_int == 'BS':
+                                                        # print("NEW value for BS: ")
+
+                                                        prop_delay_tick = ue.get_prop_delay_to_bs_tick()
+                                                        # print("PROP DELAY: ", prop_delay_tick)
+
+                                                        simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int][
+                                                            array_index][0] = \
+                                                            simulator_timing_structure[ue_key_ext]['ACK_RX'][
+                                                                ue_key_int][
+                                                                array_index][0] + prop_delay_tick
+                                                        simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int][
+                                                            array_index][1] = \
+                                                            simulator_timing_structure[ue_key_ext]['ACK_RX'][
+                                                                ue_key_int][
+                                                                array_index][1] + prop_delay_tick
+
+                                                        if simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int][
+                                                            array_index][0] < next_t_change:
+                                                            remove_item_in_timing_structure(
+                                                                input_simulator_timing_structure=copy_simulator_timing_structure,
+                                                                input_rx_key=f'UE_{ue.get_ue_id()}',
+                                                                input_type_key='ACK_RX',
+                                                                input_tx_key='BS')
+                                                        else:
+                                                            if enable_print:
+                                                                print(" NEW start_tick = ",
+                                                                      simulator_timing_structure[ue_key_ext]
+                                                                      ['ACK_RX'][ue_key_int][array_index][0])
+                                                                print("NEW end tick = ",
+                                                                      simulator_timing_structure[ue_key_ext]
+                                                                      ['ACK_RX'][ue_key_int][array_index][1])
+                        for ue_key_ext in simulator_timing_structure.keys():
+                            if ue_key_ext == 'BS':
+                                # Loop over the DATA receptions from other UEs
+                                for ue_key_int in simulator_timing_structure[ue_key_ext]['DATA_RX'].keys():
+                                    # check the value of the final_state_tick
+                                    if len(simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int]) > 0:
+                                        for array_index in range(
+                                                len(simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int])):
+                                            if \
+                                                    simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int][array_index][
+                                                        0] \
+                                                            != tot_simulation_time_tick + 1 and \
+                                                            simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int][
+                                                                array_index][0] != tot_simulation_time_tick + 1:
+                                                # print("NEW value for BS_KEY_EXT: ")
+                                                for other_ue in ue_array:
+                                                    if ue_key_int == f'UE_{other_ue.get_ue_id()}':
+                                                        # print("NEW value for BS: ")
+
+                                                        prop_delay_tick = other_ue.get_prop_delay_to_bs_tick()
+                                                        # print("PROP DELAY: ", prop_delay_tick)
+
+                                                        simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int][
+                                                            array_index][0] = \
+                                                            simulator_timing_structure[ue_key_ext]['DATA_RX'][
+                                                                ue_key_int][
+                                                                array_index][0] + prop_delay_tick
+                                                        simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int][
+                                                            array_index][1] = \
+                                                            simulator_timing_structure[ue_key_ext]['DATA_RX'][
+                                                                ue_key_int][
+                                                                array_index][1] + prop_delay_tick
+                                                        if \
+                                                                simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int][
+                                                                    array_index][0] < next_t_change:
+                                                            remove_item_in_timing_structure(
+                                                                input_simulator_timing_structure=copy_simulator_timing_structure,
+                                                                input_rx_key='BS',
+                                                                input_type_key='DATA_RX',
+                                                                input_tx_key=f'UE_{other_ue.get_ue_id()}')
+                                                        else:
+                                                            if enable_print:
+                                                                print(" NEW start_tick = ",
+                                                                      simulator_timing_structure[ue_key_ext]
+                                                                      ['DATA_RX'][ue_key_int][array_index][0])
+                                                                print("NEW end tick = ",
+                                                                      simulator_timing_structure[ue_key_ext]
+                                                                      ['DATA_RX'][ue_key_int][array_index][1])
+
+                                for ue_key_int in simulator_timing_structure[ue_key_ext]['ACK_RX'].keys():
+                                    # check the value of the final_state_tick
+                                    if len(simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int]) > 0:
+                                        for array_index in range(
+                                                len(simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int])):
+                                            if \
+                                                    simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int][array_index][0] \
+                                                            != tot_simulation_time_tick + 1 and \
+                                                            simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int][
+                                                                array_index][0] != tot_simulation_time_tick + 1:
+                                                # print("NEW value for BS_KEY_EXT: ")
+                                                for other_ue in ue_array:
+                                                    if ue_key_int == f'UE_{other_ue.get_ue_id()}':
+                                                        # print("NEW value for BS: ")
+
+                                                        prop_delay_tick = other_ue.get_prop_delay_to_bs_tick()
+                                                        # print("PROP DELAY: ", prop_delay_tick)
+
+                                                        simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int][
+                                                            array_index][0] = \
+                                                            simulator_timing_structure[ue_key_ext]['ACK_RX'][
+                                                                ue_key_int][
+                                                                array_index][0] + prop_delay_tick
+                                                        simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int][
+                                                            array_index][1] = \
+                                                            simulator_timing_structure[ue_key_ext]['ACK_RX'][
+                                                                ue_key_int][
+                                                                array_index][1] + prop_delay_tick
+
+                                                        if simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int][
+                                                            array_index][0] < next_t_change:
+                                                            remove_item_in_timing_structure(
+                                                                input_simulator_timing_structure=copy_simulator_timing_structure,
+                                                                input_rx_key='BS',
+                                                                input_type_key='ACK_RX',
+                                                                input_tx_key=f'UE_{other_ue.get_ue_id()}')
+                                                        else:
+                                                            if enable_print:
+                                                                print(" NEW start_tick = ",
+                                                                      simulator_timing_structure[ue_key_ext]
+                                                                      ['ACK_RX'][ue_key_int][array_index][0])
+                                                                print("NEW end tick = ",
+                                                                      simulator_timing_structure[ue_key_ext]
+                                                                      ['ACK_RX'][ue_key_int][array_index][1])
+
+                        simulator_timing_structure = deepcopy(copy_simulator_timing_structure)
 
                 # End Mobility
                 # The simulator is an event simulator based on tick, check the first event to process 
@@ -4919,11 +4820,6 @@ for seed in range(initial_seed, final_seed + 1):
                                   input_n_ue=n_ue,
                                   input_save_path='multi_hop_industrial_simulator/results/plot_results/Q_and_W_only_Q' + path + f"seed_{seed}")
 
-            # plot_actions_per_n_ue(input_ue_id=ue.get_ue_id(),
-            #                       input_ue_simulations_action=ue.get_actions_per_simulation(),
-            #                       input_actions_label=['Unicast', 'Broadcast', 'Forced Broadcast', 'Forwarding'],
-            #                       input_n_ue=n_ue,
-            #                       input_save_path='multi_hop_industrial_simulator/results/plot_results/v6_' + path + f"seed_{seed}")
         ################################# Movement implementation #################################
         """print("Convergence ticks of UE 3 to 0: ", convergence_tick_ue_3_to_0)
         print("Average convergence ticks of U3 3 to 0: ", np.mean(convergence_tick_ue_3_to_0))

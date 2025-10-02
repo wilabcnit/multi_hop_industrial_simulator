@@ -1,4 +1,3 @@
-import pandas as pd
 
 """
     This class implements the packet data structure with

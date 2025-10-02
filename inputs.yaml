@@ -77,13 +77,6 @@ channel:
     use_huawei_measurements: True
     p_succ_phy: 0.9
 
-core_network:
-    delay_ms : 0.1 # Delay from gNB to a server in the core network (C/M)
-
-geometry :
-    machine_size : 2
-    inter_machine_distance : 5
-
 ue:
     ue_spatial_distribution: 'Grid' #'Uniform': randomly distributed in the environment # 'Grid': UEs over the grid
     ue_starting_state: "IDLE"
@@ -131,7 +124,7 @@ simulation:
     enable_print: False  # True to obtain useful prints for debugging purposes
     star_topology: False # True if star topology, False if mesh topology
     mobility_obstacle: False
-    mobility_step_size: 2.25 # needed 2.25 for mobility_spawn True
+    mobility_step_size: 2.25 # needed 2.25 for mobility_spawn True; while for mobility_obstacle True can be 2.25 or 4.5
     mobility_spawn: False
     mobility_shuffle: False
     mobility_changes: 3

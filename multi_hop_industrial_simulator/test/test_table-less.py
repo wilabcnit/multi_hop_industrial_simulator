@@ -19,7 +19,6 @@ from multi_hop_industrial_simulator.utils.check_success import check_collision_b
 from multi_hop_industrial_simulator.utils.compute_distance_m import compute_distance_m
 from multi_hop_industrial_simulator.utils.compute_propagation_delays import compute_propagation_delays
 from multi_hop_industrial_simulator.utils.compute_simulation_outputs import compute_simulator_outputs
-from multi_hop_industrial_simulator.utils.compute_snr_threshold import compute_snr_threshold_db
 from multi_hop_industrial_simulator.utils.instantiate_bs import instantiate_bs
 from multi_hop_industrial_simulator.utils.read_input_file import read_input_file
 from multi_hop_industrial_simulator.utils.read_inputs import read_inputs
@@ -524,8 +523,6 @@ thz_channel = THzChannel(params=inputs)
 
 # Compute the SNR threshold
 payload_fq = inputs.get('traffic_fq').get('payload')
-snr_threshold_db = compute_snr_threshold_db(input_payload_bytes=payload_fq, input_p_succ_phy=p_succ_phy)
-print("SNR THRESHOLD: ", snr_threshold_db)
 
 # Compute the simulation duration
 tot_simulation_time_tick = math.ceil(simulation_time_s / simulator_tick_duration_s)
@@ -608,7 +605,7 @@ for seed in range(initial_seed, final_seed + 1):
                                                                   input_thz_channel=thz_channel,
                                                                   bandwidth_hz=bandwidth_hz,
                                                                   carrier_frequency_ghz=carrier_frequency_ghz,
-                                                                  snr_threshold_db=snr_th_db,
+                                                                  snr_threshold_db=sinr_th_db,
                                                                   antenna_gain_model=antenna_gain_model,
                                                                   use_huawei_measurements=False,
                                                                   enable_print=enable_print)
@@ -637,7 +634,7 @@ for seed in range(initial_seed, final_seed + 1):
             # to reach the BS
 
             check_for_neighbours(ue_array=ue_array, machine_array=machine_array, bs=bs,
-                                 input_snr_threshold_db=snr_th_db,
+                                 input_snr_threshold_db=sinr_th_db,
                                  input_shadowing_sample_index=0, input_thz_channel=thz_channel,
                                  input_carrier_frequency_ghz=carrier_frequency_ghz, input_bandwidth_hz=bandwidth_hz,
                                  input_apply_fading=apply_fading, input_clutter_density=clutter_density,

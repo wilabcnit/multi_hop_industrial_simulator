@@ -8,7 +8,7 @@ from multi_hop_industrial_simulator.network.ue_buffer import UeBuffer
 from multi_hop_industrial_simulator.network.packet import Packet
 
 ##################################RL Implementation##################################
-from multi_hop_industrial_simulator.utils.utils_for_tb_ualoha_with_dqn import ttl_reset, select_input_DRL, compute_normalized_linear_interpolation
+from multi_hop_industrial_simulator.utils.utils_for_tb_ualoha_with_dqn import ttl_reset, select_input_DRL
 from multi_hop_industrial_simulator.utils.read_inputs import read_inputs
 
 inputs = read_inputs('inputs.yaml')

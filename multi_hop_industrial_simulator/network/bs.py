@@ -6,11 +6,7 @@ from multi_hop_industrial_simulator.network.packet import Packet
 from multi_hop_industrial_simulator.network.bs_buffer import BsBuffer
 import copy as cp
 import sys
-from multi_hop_industrial_simulator.network.ue import Ue
-from typing import List
 import numpy as np
-import math
-
 
 class BS(TrafficModel):
     """

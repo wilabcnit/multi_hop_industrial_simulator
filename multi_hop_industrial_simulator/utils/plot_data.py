@@ -18,9 +18,10 @@ font_dict = {'label_size': 22,
 def plot_curves(x_data, y_data, x_label, y_label, legends,
                 marker=None, x_ticks=None, y_ticks=None, colors=None, show_grid=True,
                 save_file=None, textbox_text=None, textbox_position: tuple = None,
-                plot_type='line', hatches=None, width: float = None, ci_data=None, label_values=None,
-                asymptote_y1: float = None, asymptote_y1_label: str = None, asymptote_y1_color: str = 'black', asymptote_y1_style: str = '--',
-                asymptote_y2: float = None, asymptote_y2_label: str = None, asymptote_y2_color: str = 'black', asymptote_y2_style: str = '-.'):
+                plot_type='line', hatches=None, width: float = None, ci_data=None, label_values=None, linestyles=None,
+                asymptote_y1: float = None, asymptote_y1_label: str = None, asymptote_y1_color: str = 'black',
+                asymptote_y1_style: str = '--', asymptote_y2: float = None, asymptote_y2_label: str = None,
+                asymptote_y2_color: str = 'black', asymptote_y2_style: str = '-.'):
     """
     Parameters
     ----------
