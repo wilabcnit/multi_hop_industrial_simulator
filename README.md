@@ -135,8 +135,53 @@ Clone the repository and install the dependencies:
 git clone https://github.com/<your-username>/<your-repo>.git (inserire nome finale)
 cd <your-repo>
 pip install <package_name>==<package_version>
+```
 
 ## How to use it:
+To verify the installation, you can run a simulation of **test_table-based.py** considering the full_queue traffic model for all the UEs.  
 
+**Example Input Parameters:** The simulator is configured via the inputs.yaml.  
+All parameters can be modified by the user to explore different scenarios and evaluate the impact on performance.  
+For convenience, we provide in the repository a complete example input file with default values.  
+Below is a **minimal excerpt** used for the quick test:
+```yaml
+traffic_fq:
+    type: 4
+    payload: 20  # [B]
+    overhead_data: 10  # [B]
+    percentage_of_ue: 100
+
+simulation:
+    tot_simulation_time_s: 0.0005
+    n_simulations: 1
+    initial_number_of_ues: 6
+    final_number_of_ues: 6
+    seed: 18
+```
+When the **test_table-based.py** runs successfully with the default values reported in inputs.yaml, you should obtain in output the following performance:
+```
+p_mac:  [0.9771614559121411]
+S_net:  [2.10208]
+Latency:  [6.135216367357746e-07]
+Energy:  [2.4930431185849e-10]
+Jain Index:  [0.9392188281856884]
+Ticks in BO:  102.26491243666104
+Ticks in TX_ACK:  2.001190948789202
+Ticks in TX_DATA:  11.567389758179232
+Ticks in WAIT_ACK:  85.28638748110608
+Average Forced Broadcast Actions per Simulation:  3.6666666666666665
+Average N forwarding per Simulation:  1075.0
+Average number of interferers =  0.40626721855654885
+```
+
+To run more complex experiments, simply edit inputs.yaml and adjust the parameters of interest.
+
+## Authors
+Sara Cavallero, Andrea Pumilia, and Giampaolo Cuozzo are with the National Laboratory of Wireless Communications (WiLab), CNIT, Italy.
+Chiara Buratti is with the Department of Electrical, Electronics, and Information Engineering ”Guglielmo Marconi” of the University of Bologna, Italy.
+## Related publications
 The main reference for the simulator is the paper: "MAC and Routing Protocols Design in Multi-Hop Terahertz Networks", S. Cavallero, A. Pumilia, G. Cuozzo, C. Buratti....
+## License
+
+
 
