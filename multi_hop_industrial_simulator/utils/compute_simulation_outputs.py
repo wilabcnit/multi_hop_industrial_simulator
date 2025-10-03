@@ -29,9 +29,9 @@ def compute_simulator_outputs(ue_array: ndarray, bs: BS, simulation_time_s: floa
             ue.set_n_data_tx(packet_tx_ue)
 
         # Prints
-        print("UE: ", ue.get_ue_id())
-        print("DATA TX:", ue.get_n_data_tx())
-        print("DATA RX AT BS: ", bs.get_n_data_rx_from_ues(input_ue_id=ue.get_ue_id()))
+        # print("UE: ", ue.get_ue_id())
+        # print("DATA TX:", ue.get_n_data_tx())
+        # print("DATA RX AT BS: ", bs.get_n_data_rx_from_ues(input_ue_id=ue.get_ue_id()))
 
         # Compute pmac and update the output dictionary
         if ue.get_n_data_tx() > 0:
@@ -60,7 +60,7 @@ def compute_simulator_outputs(ue_array: ndarray, bs: BS, simulation_time_s: floa
     else:
         output_dict['j_index'][f"N={output_n_ue}"][f"Sim={output_n_sim}"] = (
                 np.sum(s_array) ** 2 / (len(s_array) * np.sum(s_array ** 2)))
-    print("PACCH_RX with success at the BS: ", bs.get_n_data_rx_fq())
+    # print("PACCH_RX with success at the BS: ", bs.get_n_data_rx_fq())
 
     # Print intermediate results
     for key, values in output_dict.items():

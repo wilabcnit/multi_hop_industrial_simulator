@@ -100,7 +100,7 @@ x = [0.5, 1, 1.5, 2, 2.5, 3]
 
 plot_curves(x_data=x, y_data=[y1_data, y2_data, y5_data, y3_data, y4_data, y6_data],
                                 ci_data=None,
-            x_label=r'Per-UE Latency ($\overline{L}_j [\mu_s]$)',
+            x_label=r'Per-UE Latency ($\overline{L}_{\rm UE} \; [\mu_s]$)',
             y_label=r'CDF',
             legends=['TB, N = 18', 'AODV, N = 18', 'TL, N = 18', r'TB, N = 24', r'AODV, N = 24', 'TL, N = 24'],
             marker=["o", "s", "^", "o", "s", "^"], x_ticks=None, y_ticks=None,
