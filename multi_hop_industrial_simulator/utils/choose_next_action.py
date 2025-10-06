@@ -20,11 +20,17 @@ DRL_input_type_state = inputs.get('rl').get('agent').get('DRL_type_state')
 
 # Function to choose the next action to be taken by the UE  {unicast, broadcast, forced broadcast}
 def choose_next_action_tb_no_RL(input_ue: Ue, input_enable_print: bool = False):
-    """
-    Choose the next action to be taken by the UE when the UE does not use RL
-    :param input_ue: UE object
-    :param input_enable_print: boolean to enable print
-    :return: action: None
+    """Choose the next action to be taken by the UE when the UE does not use RL
+
+    Args:
+      input_ue: UE object
+      input_enable_print: boolean to enable print
+      input_ue: Ue: 
+      input_enable_print: bool:  (Default value = False)
+
+    Returns:
+      action: None
+
     """
 
     # mi serve
@@ -112,11 +118,17 @@ def choose_next_action_tb_no_RL(input_ue: Ue, input_enable_print: bool = False):
 
 # Function to choose the next action to be taken by the UE  with the AODV protocol
 def choose_next_action_aodv(input_ue: Ue, input_enable_print: bool = False):
-    """
-    Choose the next action to be taken by the UE when the UE does not use RL
-    :param input_ue: UE object
-    :param input_enable_print: boolean to enable print
-    :return: action: None
+    """Choose the next action to be taken by the UE when the UE does not use RL
+
+    Args:
+      input_ue: UE object
+      input_enable_print: boolean to enable print
+      input_ue: Ue: 
+      input_enable_print: bool:  (Default value = False)
+
+    Returns:
+      action: None
+
     """
 
     counter_fw = 0

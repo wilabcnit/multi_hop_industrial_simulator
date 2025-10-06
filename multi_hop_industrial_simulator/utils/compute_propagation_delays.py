@@ -10,6 +10,16 @@ from scipy.constants import c
 
 # Function to compute the propagation delays (in seconds and in ticks) between all the UEs and the BS
 def compute_propagation_delays(ue_array: ndarray, bs: BS, input_simulator_tick_duration_s: float):
+    """
+
+    Args:
+      ue_array: ndarray: 
+      bs: BS: 
+      input_simulator_tick_duration_s: float: 
+
+    Returns:
+
+    """
     for ue in ue_array:
         # Compute the distance from the BS
         distance_to_bs_m = np.sqrt((ue.x - bs.x) ** 2 + (ue.y - bs.y) ** 2 + (ue.z - bs.z) ** 2)

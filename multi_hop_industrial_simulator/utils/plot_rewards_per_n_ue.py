@@ -22,6 +22,17 @@ final_number_of_ues = inputs.get('simulation').get('final_number_of_ues')
 
 # Function to plot the rewards obtained by the agent for a specific UE
 def plot_rewards_per_n_ue(input_ue_id,input_ue_simulations_reward, input_n_ue, input_save_path):
+    """
+
+    Args:
+      input_ue_id: 
+      input_ue_simulations_reward: 
+      input_n_ue: 
+      input_save_path: 
+
+    Returns:
+
+    """
     plt.figure(input_ue_id, figsize=(8, 4))
     plt.plot(input_ue_simulations_reward)
     plt.title(f'Agent in node: {input_ue_id}')
@@ -37,6 +48,18 @@ def plot_rewards_per_n_ue(input_ue_id,input_ue_simulations_reward, input_n_ue, i
 
 # Function to plot the actions taken by the agent for a specific UE (Old RL version)
 def plot_actions_per_n_ue(input_ue_id,input_ue_simulations_action,input_actions_label, input_n_ue, input_save_path):
+    """
+
+    Args:
+      input_ue_id: 
+      input_ue_simulations_action: 
+      input_actions_label: 
+      input_n_ue: 
+      input_save_path: 
+
+    Returns:
+
+    """
     plt.figure(100 +input_ue_id, figsize=(8, 4))
 
     plt.plot( input_ue_simulations_action[0], 'r', label=input_actions_label[0])  # Red solid line

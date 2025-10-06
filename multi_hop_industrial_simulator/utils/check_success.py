@@ -7,6 +7,20 @@ import math
 def check_collision(input_simulator_timing_structure: dict, input_t_start_rx: int, input_t_end_rx: int,
                      input_ue_id: int = None, input_tx: str = None, input_ue_id_rx: int = None,
                      ues_colliding: list = None):
+    """
+
+    Args:
+      input_simulator_timing_structure: dict: 
+      input_t_start_rx: int: 
+      input_t_end_rx: int: 
+      input_ue_id: int:  (Default value = None)
+      input_tx: str:  (Default value = None)
+      input_ue_id_rx: int:  (Default value = None)
+      ues_colliding: list:  (Default value = None)
+
+    Returns:
+
+    """
 
     # Loop over the timing structure to check collisions
     for ue_key_ext, ue_data_ext in input_simulator_timing_structure.items():
@@ -42,6 +56,20 @@ def check_collision(input_simulator_timing_structure: dict, input_t_start_rx: in
 def check_collision_aodv(input_simulator_timing_structure: dict, input_t_start_rx: int, input_t_end_rx: int,
                      input_ue_id: int = None, input_tx: str = None, input_ue_id_rx: int = None,
                      ues_colliding: list = None):
+    """
+
+    Args:
+      input_simulator_timing_structure: dict: 
+      input_t_start_rx: int: 
+      input_t_end_rx: int: 
+      input_ue_id: int:  (Default value = None)
+      input_tx: str:  (Default value = None)
+      input_ue_id_rx: int:  (Default value = None)
+      ues_colliding: list:  (Default value = None)
+
+    Returns:
+
+    """
 
     # Loop over the timing structure to check collisions
     for ue_key_ext, ue_data_ext in input_simulator_timing_structure.items():
@@ -104,6 +132,18 @@ def check_collision_aodv(input_simulator_timing_structure: dict, input_t_start_r
 # Function to check if a UE's transmission has collided at the BS
 def check_collision_bs(input_simulator_timing_structure: dict, input_t_start_rx: int, input_t_end_rx: int,
                      input_ue_id: int = None, ues_colliding: list = None):
+    """
+
+    Args:
+      input_simulator_timing_structure: dict: 
+      input_t_start_rx: int: 
+      input_t_end_rx: int: 
+      input_ue_id: int:  (Default value = None)
+      ues_colliding: list:  (Default value = None)
+
+    Returns:
+
+    """
 
     for ue_key_int, ue_value_int in input_simulator_timing_structure['BS']['DATA_RX'].items():
         if ue_key_int != f'UE_{input_ue_id}':
@@ -132,6 +172,18 @@ def check_collision_bs(input_simulator_timing_structure: dict, input_t_start_rx:
 # FUnction to check if a UE's transmission has collided at the BS (for AODV with RREQ and RREPLY)
 def check_collision_bs_aodv(input_simulator_timing_structure: dict, input_t_start_rx: int, input_t_end_rx: int,
                      input_ue_id: int = None, ues_colliding: list = None):
+    """
+
+    Args:
+      input_simulator_timing_structure: dict: 
+      input_t_start_rx: int: 
+      input_t_end_rx: int: 
+      input_ue_id: int:  (Default value = None)
+      ues_colliding: list:  (Default value = None)
+
+    Returns:
+
+    """
 
     for ue_key_int, ue_value_int in input_simulator_timing_structure['BS']['DATA_RX'].items():
         if ue_key_int != f'UE_{input_ue_id}':
@@ -171,6 +223,17 @@ def check_collision_bs_aodv(input_simulator_timing_structure: dict, input_t_star
 # Function to check if a transmission is successful based on SNR, SIR, modulation order, and payload size
 def check_success(input_snr_db: float = None, input_sir_db: float = None, input_modulation_order: int = None,
                   input_payload_bytes: int = None):
+    """
+
+    Args:
+      input_snr_db: float:  (Default value = None)
+      input_sir_db: float:  (Default value = None)
+      input_modulation_order: int:  (Default value = None)
+      input_payload_bytes: int:  (Default value = None)
+
+    Returns:
+
+    """
 
     max_snr_linear = 10 ** 308  # Limit close to max float
     if (input_snr_db / 10) > 308:
@@ -207,6 +270,16 @@ def check_success(input_snr_db: float = None, input_sir_db: float = None, input_
 # Function to compute the probability of success based on SNR, modulation order, and payload size
 def compute_p_success(input_snr_db: float = None, input_modulation_order: int = None,
                   input_payload_bytes: int = None):
+    """
+
+    Args:
+      input_snr_db: float:  (Default value = None)
+      input_modulation_order: int:  (Default value = None)
+      input_payload_bytes: int:  (Default value = None)
+
+    Returns:
+
+    """
 
     max_snr_linear = 10 ** 308  # Limit close to max float
     if (input_snr_db/10) > 308:

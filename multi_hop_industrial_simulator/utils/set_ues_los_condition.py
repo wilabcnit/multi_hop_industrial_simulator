@@ -14,25 +14,27 @@ ue_distribution_type = inputs.get('ue').get('ue_spatial_distribution')
 
 # Function to determine and set the LoS/NLoS condition for a specific UE w.r.t. the BS or other UEs
 def set_ues_los_condition(ue: Ue, bs: BS, machine_array: ndarray, link : str):
-    """
-    Determine if there is a Line-of-Sight (LoS) or Non-Line-of-Sight (NLoS) condition between UEs
+    """Determine if there is a Line-of-Sight (LoS) or Non-Line-of-Sight (NLoS) condition between UEs
     considering obstructions (machines).
-
+    
     Parameters:
         ue_array : Array of UEs.
         bs : BS
         machine_array : Array of Machines.
-
+    
     Returns:
         None: The function sets the 'los_nlos_info' field of each UE object with the LoS/NLoS
               information w.r.t. the BS and other UEs.
 
-    Parameters
-    ----------
-    link
-    machine_array
-    bs
-    ue
+    Args:
+      ue: Ue: 
+      bs: BS: 
+      machine_array: ndarray: 
+      link : str: 
+
+    Returns:
+
+    
     """
     is_in_los = True
 

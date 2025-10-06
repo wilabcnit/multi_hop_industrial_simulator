@@ -9,17 +9,7 @@ import sys
 import numpy as np
 
 class BS(TrafficModel):
-    """
-
-    Attributes
-    ----------
-    params: dict
-        Dictionary with all inputs
-    traffic_type: str
-        {traffic_rt, traffic_cn, traffic_nrt}
-    starting_state : str
-        Initial state of the BS.
-    """
+    """ """
 
     def __init__(self, params, traffic_type: str, starting_state: str, input_full_queue: bool):
         self.x = 0.0
@@ -85,85 +75,178 @@ class BS(TrafficModel):
             "traffic_nrt": super().get_exp_distribution
         }
 
-    # Set the BS coordinates
     def set_coordinates(self, x_input: float, y_input: float, z_input: float):
+        """
+
+        Args:
+          x_input: float: x coordinate of the BS
+          y_input: float: y coordinate of the BS
+          z_input: float: z coordinate of the BS
+
+        Set the BS coordinates
+
+        """
         self.x = x_input
         self.y = y_input
         self.z = z_input
 
-    # Get the BS coordinates
     def get_coordinates(self):
+        """
+        Returns: get the BS coordinates
+        """
         return np.array([self.x, self.y, self.z])
 
-    # Set the carrier frequency
     def set_carrier_frequency(self, input_carrier_frequency: float):
+        """
+
+        Args:
+          input_carrier_frequency: float: frequency of the carrier
+
+        Set the carrier frequency
+
+        """
         self.carrier_frequency = input_carrier_frequency
 
-    # Get the carrier frequency
     def get_carrier_frequency(self):
+        """
+        Returns: the carrier frequency
+        """
         return self.carrier_frequency
 
-    # Get the state of the BS
     def get_state(self):
+        """
+        Returns: state of the BS
+        """
         return self.state
 
-    # Set the state of the BS
     def set_state(self, input_state: str):
+        """
+
+        Args:
+          input_state: str: current state of the BS
+
+        Returns:
+            Set the state of the BS
+
+        """
         self.state = input_state
 
-    # Update the state duration of the BS
     def update_state_duration(self, input_ticks: int):
+        """
+
+        Args:
+          input_ticks: int: duration in ticks of the NEW BS state
+
+        Update the state duration of the BS
+
+        """
         self.t_state += input_ticks
 
-    # Set the duration of the state of the BS
     def set_state_duration(self, input_ticks: int):
+        """
+
+        Args:
+          input_ticks: int: duration in ticks of the current BS state
+
+        Returns:
+            duration of the state of the BS
+
+        """
         self.t_state = input_ticks
 
-    # Get the duration of the state of the BS
     def get_state_duration(self):
+        """
+        Returns: the state duration of the BS
+        """
         return self.t_state
 
-    # Set the starting tick of the state of the BS
     def set_state_starting_tick(self, input_tick: int):
+        """
+
+        Args:
+          input_tick: int: current tick
+
+        Returns:
+            starting tick of the state of the BS
+
+        """
         self.t_starting_state = input_tick
 
-    # Get the starting tick of the state of the BS
     def get_state_starting_tick(self):
+        """
+        Returns: the starting tick of the state of the BS
+        """
         return self.t_starting_state
 
-    # Set the final tick of the state of the BS
     def set_state_final_tick(self, input_tick: int):
+        """
+
+        Args:
+          input_tick: int: current tick
+
+        Returns:
+            final tick of the state of the BS
+
+        """
         self.t_final_state = input_tick
 
-    # Get the final tick of the state of the BS
     def get_state_final_tick(self):
+        """
+        Returns: the final tick of the state of the BS
+        """
         return self.t_final_state
 
-    # Set the packet size for the packet of the BS
     def set_new_packet_size(self, packet_size: int):
+        """
+
+        Args:
+          packet_size: int: size of the packet (bytes)
+
+        Set the packet size for the packet of the BS
+
+        """
         self.packet.set_size(packet_size)
 
-    # Get the packet size for the packet of the BS
     def get_new_packet_size(self):
+        """
+        Returns: packet size of the packet of the BS
+        """
         return self.packet.get_size()
 
     # Get the next packet generation instant for the packet of the BS
     def get_next_packet_generation_instant_bs(self):
+        """
+        Returns: the next packet generation instant of the BS
+        """
         return self.t_generation_optimization
 
-    # Set the LOS/NLOS condition of the BS
     def set_channel_condition_with_bs(self, is_low_channel_condition_bool: bool):
+        """
+
+        Args:
+          is_low_channel_condition_bool: bool: True, if the channel condition is low (BS' height is lower than average
+          clutter height); False, otherwise
+
+        Returns:
+            Set the LOS/NLOS condition of the BS with respect to a UE
+
+        """
         self.is_low_channel_condition_with_bs = is_low_channel_condition_bool
 
-    # Get the LOS/NLOS condition of the BS
     def get_channel_condition_with_bs(self):
+        """
+        Returns: the channel condition of the BS
+        """
         return self.is_low_channel_condition_with_bs
 
     # Method for adding a new packet in the BS buffer
     def add_new_packet(self, current_tick: int):
-        """
-            Add a new packet in the queue and compute the next generation instant, if the buffer is not full.
+        """Add a new packet in the queue and compute the next generation instant, if the buffer is not full.
             Otherwise, just discard the packet.
+
+        Args:
+          current_tick: int: current tick of the simulation
+
         """
         new_packet = cp.copy(self.packet)
         new_packet.set_generation_time(current_tick)
@@ -181,77 +264,166 @@ class BS(TrafficModel):
 
         self.packet.set_id(self.packet.get_id() + 1)
 
-    # Get the LOS/NLOS condition of a given UE
     def get_los_condition(self, ue):  # NOTE: This is something the UE may not know in practise,
-        # so do not use it to change its behavior during simulation
+        """
+
+        Args:
+          ue: class
+
+        Returns:
+            LOS or NLOS condition of a given UE
+
+        """
+
         return ue.is_in_los
 
-    # Get the bit rate value
     def get_bit_rate_gbits(self):
+        """
+        Returns: the bit rate of the BS
+        """
         return self.bit_rate_gbits
 
-    # Set the bit rate value
     def set_bit_rate_gbits(self, input_bit_rate_gbits: float):
+        """
+
+        Args:
+          input_bit_rate_gbits: float: input value of the Bit Rate in Gbit/s
+
+        Set the bit rate value of the BS in Gbit/s
+
+        """
         self.bit_rate_gbits = input_bit_rate_gbits
 
-    # Set the starting tick of the ACK transmission
     def set_start_tx_ack(self, input_start_tx_ack: int):
+        """
+
+        Args:
+          input_start_tx_ack: int: input value of the starting tick of ACK transmission from BS
+
+        Set the starting tick of the ACK transmission
+
+        """
         self.t_start_tx_ack = input_start_tx_ack
 
-    # Get the starting tick of the ACK transmission
     def get_start_tx_ack(self):
+        """
+        Returns: the starting tick of the ACK transmission from BS
+        """
         return self.t_start_tx_ack
 
-    # Set the ending tick of the ACK transmission
     def set_end_tx_ack(self, input_end_tx_ack: int):
+        """
+
+        Args:
+          input_end_tx_ack: int: input value of the ending tick of ACK transmission from BS
+
+        Set the ending tick of the ACK transmission
+
+        """
         self.t_end_tx_ack = input_end_tx_ack
 
-    # Get the ending tick of the ACK transmission
     def get_end_tx_ack(self):
+        """
+        Returns: the ending tick of the ACK transmission from BS
+        """
         return self.t_end_tx_ack
 
-    # Set the number of data successfully received at BS
     def set_n_data_rx(self, input_n_data_rx: int):
+        """
+
+        Args:
+          input_n_data_rx: int: number of data received at BS
+
+        Set the number of data received at BS
+
+        """
         self.n_data_rx = input_n_data_rx
 
-    # Get the number of data successfully received at BS
     def get_n_data_rx(self):
+        """
+        Returns: the number of data received at BS
+        """
         return self.n_data_rx
 
-    # Set the number of data successfully received for RT traffic at BS
     def set_n_data_rx_rt(self, input_n_data_rx_rt: int):
+        """
+
+        Args:
+          input_n_data_rx_rt: int: number of data received at BS for RT traffic
+
+        Set the number of data received at BS for RT traffic
+
+        """
         self.n_data_rx_rt = input_n_data_rx_rt
 
-    # Get the number of data successfully received for RT traffic at BS
     def get_n_data_rx_rt(self):
+        """
+        Returns: Get the number of data received at BS for RT traffic
+        """
         return self.n_data_rx_rt
 
-    # Set the number of data successfully received for CN traffic at BS
     def set_n_data_rx_cn(self, input_n_data_rx_cn: int):
+        """
+
+        Args:
+          input_n_data_rx_cn: int: number of data received at BS for CN traffic
+
+        Set the number of data received at BS for CN traffic
+
+        """
         self.n_data_rx_cn = input_n_data_rx_cn
 
-    # Get the number of data successfully received for CN traffic at BS
     def get_n_data_rx_cn(self):
+        """
+        Returns: Get the number of data received at BS for CN traffic
+        """
         return self.n_data_rx_cn
 
-    # Set the number of data successfully received for NRT traffic at BS
     def set_n_data_rx_nrt(self, input_n_data_rx_nrt: int):
+        """
+
+        Args:
+          input_n_data_rx_nrt: int: number of data received at BS for NRT traffic
+
+        Set the number of data received at BS for NRT traffic
+
+        """
         self.n_data_rx_nrt = input_n_data_rx_nrt
 
-    # Get the number of data successfully received for NRT traffic at BS
     def get_n_data_rx_nrt(self):
+        """
+        Returns: Get the number of data received at BS for NRT traffic
+        """
         return self.n_data_rx_nrt
 
-    # Set the number of data successfully received for FQ traffic at BS
     def set_n_data_rx_fq(self, input_n_data_rx_fq: int):
+        """
+
+        Args:
+          input_n_data_rx_fq: int: number of data received at BS for FQ traffic
+
+        Set the number of data received at BS for FQ traffic
+
+        """
         self.n_data_rx_fq = input_n_data_rx_fq
 
-    # Get the number of data successfully received for FQ traffic at BS
     def get_n_data_rx_fq(self):
+        """
+         Returns: the number of data received at BS for FQ traffic
+         """
         return self.n_data_rx_fq
 
-    # Update the number of data successfully received at BS
     def update_n_data_rx(self, input_ue_traffic_type: str, packets_received: int, input_enable_print: bool = False):
+        """
+
+        Args:
+          input_ue_traffic_type: str: type of traffic of the UE
+          packets_received: int: number of packets received from that UE
+          input_enable_print: bool:  (Default value = False)
+
+        Update the number of data successfully received at BS from that UE
+
+        """
         self.n_data_rx += packets_received
         if input_enable_print:
             print('The BS has updated n_data_rx to ', self.n_data_rx)
@@ -275,16 +447,40 @@ class BS(TrafficModel):
         else:
             sys.exit("Unknown traffic type when updating n_data_rx at the BS")
 
-    # Set the number of data received from a given UE
     def set_n_data_rx_from_ues(self, input_ue_id: int, input_n_data_rx: int):
+        """
+
+        Args:
+          input_ue_id: int: ID of the UE from which the data is received with success
+          input_n_data_rx: int: number of data received at BS from that UE
+
+        Set the number of data received from a given UE
+
+        """
         self.n_data_rx_from_ues[f'UE_{input_ue_id}'] = input_n_data_rx
 
-    # Get the number of data received from a given UE
     def get_n_data_rx_from_ues(self, input_ue_id: int):
+        """
+
+        Args:
+          input_ue_id: int: ID of the UE from which the BS wants to know how many data it has received
+
+        Returns:
+            the number of data received from that UE
+
+        """
         return self.n_data_rx_from_ues[f'UE_{input_ue_id}']
 
-    # Update the number of data received from a given UE
     def update_n_data_rx_from_ues(self, input_ue_id: int, packets_received: int):
+        """
+
+        Args:
+          input_ue_id: int: ID of the UE from which the BS has received new packets
+          packets_received: int: number of packets received from that UE
+
+        Update the number of data received from that UE
+
+        """
         self.n_data_rx_from_ues[f'UE_{input_ue_id}'] += packets_received
 
 

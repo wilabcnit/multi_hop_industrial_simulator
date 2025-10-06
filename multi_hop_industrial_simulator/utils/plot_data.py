@@ -23,49 +23,45 @@ def plot_curves(x_data, y_data, x_label, y_label, legends,
                 asymptote_y1_style: str = '--', asymptote_y2: float = None, asymptote_y2_label: str = None,
                 asymptote_y2_color: str = 'black', asymptote_y2_style: str = '-.'):
     """
-    Parameters
-    ----------
-    ci_data: list or numpy array
-        Contains the data for the confidence interval
-    x_data : list or numpy array
-        Contains the data for the x axis
-    y_data : list or numpy array
-        Contains data for the y-axis. It can be a list of list, or a 2-dimensional array,
-        if more than one curve has to be plotted.
-    x_label : str
-        Label for the x-axis.
-    y_label : str
-        Label for the y-axis
-    legends : list of str
-        Contains the labels for the curves, with the same order of 'y_data'. If one curve
-        is passed, 'legends' has to be a list with one element.
-    marker : list of char, optional
-        Contains the markers for the different curves.
-    x_ticks : list, optional
-        Contains two lists or numpy array elements, one for the tick positions, one for the
-        values, for the x-axis.
-    y_ticks : list, optional
-        Contains two lists or numpy array elements, one for the tick positions, one for the
-        values, for the y-axis.
-    colors : list, optional
-        List with colors for the different curves, with the same order of 'y_data'.
-    show_grid : bool, optional
-        Show or not the grid.
-    save_file : str, optional
-        Path + filename to save the plot. If None, it does not save the plot.
-    textbox_text : str, optional
-        Text to be inserted in the textbox
-    textbox_position : str, optional
-        Position of the textbox
-    plot_type : str, optional
-        Type of plot to generate. Either 'line' for line plots or 'bar' for bar charts.
-    hatches : list, optional
-        List of hatch patterns for each set of bars.
-    width : float, optional
-        Width of the bars.
 
-    Returns
-    -------
+    Args:
+      ci_data(list or numpy array, optional): Contains the data for the confidence interval (Default value = None)
+      x_data(list or numpy array): Contains the data for the x axis
+      y_data(list or numpy array): Contains data for the y-axis. It can be a list of list, or a 2-dimensional array,
+    if more than one curve has to be plotted.
+      x_label(str): Label for the x-axis.
+      y_label(str): Label for the y-axis
+      legends(list of str): Contains the labels for the curves, with the same order of 'y_data'. If one curve
+    is passed, 'legends' has to be a list with one element.
+      marker(list of char, optional, optional): Contains the markers for the different curves. (Default value = None)
+      x_ticks(list, optional, optional): Contains two lists or numpy array elements, one for the tick positions, one for the
+    values, for the x-axis. (Default value = None)
+      y_ticks(list, optional, optional): Contains two lists or numpy array elements, one for the tick positions, one for the
+    values, for the y-axis. (Default value = None)
+      colors(list, optional, optional): List with colors for the different curves, with the same order of 'y_data'. (Default value = None)
+      show_grid(bool, optional, optional): Show or not the grid. (Default value = True)
+      save_file(str, optional, optional): Path + filename to save the plot. If None, it does not save the plot. (Default value = None)
+      textbox_text(str, optional, optional): Text to be inserted in the textbox (Default value = None)
+      textbox_position(str, optional): Position of the textbox
+      plot_type(str, optional, optional): Type of plot to generate. Either 'line' for line plots or 'bar' for bar charts. (Default value = 'line')
+      hatches(list, optional, optional): List of hatch patterns for each set of bars. (Default value = None)
+      width(float, optional): Width of the bars.
+      textbox_position: tuple:  (Default value = None)
+      width: float:  (Default value = None)
+      label_values:  (Default value = None)
+      linestyles:  (Default value = None)
+      asymptote_y1: float:  (Default value = None)
+      asymptote_y1_label: str:  (Default value = None)
+      asymptote_y1_color: str:  (Default value = 'black')
+      asymptote_y1_style: str:  (Default value = '--')
+      asymptote_y2: float:  (Default value = None)
+      asymptote_y2_label: str:  (Default value = None)
+      asymptote_y2_color: str:  (Default value = 'black')
+      asymptote_y2_style: str:  (Default value = '-.')
+
+    Returns:
+
+    
     """
     rect = None
 
@@ -208,6 +204,22 @@ def plot_curves(x_data, y_data, x_label, y_label, legends,
 def plot_factory(factory_length: float, factory_width: float, factory_height: float,
                  machine_list: List[Machine], ue_list: List[Ue], bs: BS,
                  distribution_class: Distribution, scenario_name: str, save_file: str = None):
+    """
+
+    Args:
+      factory_length: float: 
+      factory_width: float: 
+      factory_height: float: 
+      machine_list: List[Machine]: 
+      ue_list: List[Ue]: 
+      bs: BS: 
+      distribution_class: Distribution: 
+      scenario_name: str: 
+      save_file: str:  (Default value = None)
+
+    Returns:
+
+    """
     fig = plt.figure()
     ax = fig.add_subplot(projection='3d')
     ax.view_init(30, -50)  # Adjust elevation and azimuthal angles
@@ -361,6 +373,30 @@ def plot_snr(factory_length: float, factory_width: float, factory_height: float,
              distribution_class: Distribution, scenario_name: str, apply_fading: bool, fading: float, shad: float,
              pt: float, save_file: str = None, snr_list: list = None,
              carrier_frequency_hz: list = None, ue_list_x: list = None, ue_list_y: list = None):
+    """
+
+    Args:
+      factory_length: float: 
+      factory_width: float: 
+      factory_height: float: 
+      machine_list: List[Machine]: 
+      ue_list: List[Ue]: 
+      bs: BS: 
+      distribution_class: Distribution: 
+      scenario_name: str: 
+      apply_fading: bool: 
+      fading: float: 
+      shad: float: 
+      pt: float: 
+      save_file: str:  (Default value = None)
+      snr_list: list:  (Default value = None)
+      carrier_frequency_hz: list:  (Default value = None)
+      ue_list_x: list:  (Default value = None)
+      ue_list_y: list:  (Default value = None)
+
+    Returns:
+
+    """
     # fig, ax = plt.subplots(figsize=(12, 10))
     plt.plot((0, 0), (factory_width, 0), color='grey')
     plt.plot((0, factory_length), (0, 0), color='grey')
@@ -546,6 +582,30 @@ def plot_ps(factory_length: float, factory_width: float, factory_height: float,
              distribution_class: Distribution, scenario_name: str, apply_fading: bool, fading: float, shad: float,
              pt: float, save_file: str = None, ps_list: list = None,
              carrier_frequency_hz: list = None, ue_list_x: list = None, ue_list_y: list = None):
+    """
+
+    Args:
+      factory_length: float: 
+      factory_width: float: 
+      factory_height: float: 
+      machine_list: List[Machine]: 
+      ue_list: List[Ue]: 
+      bs: BS: 
+      distribution_class: Distribution: 
+      scenario_name: str: 
+      apply_fading: bool: 
+      fading: float: 
+      shad: float: 
+      pt: float: 
+      save_file: str:  (Default value = None)
+      ps_list: list:  (Default value = None)
+      carrier_frequency_hz: list:  (Default value = None)
+      ue_list_x: list:  (Default value = None)
+      ue_list_y: list:  (Default value = None)
+
+    Returns:
+
+    """
     # fig, ax = plt.subplots(figsize=(12, 10))
     plt.plot((0, 0), (factory_width, 0), color='grey')
     plt.plot((0, factory_length), (0, 0), color='grey')
@@ -684,6 +744,15 @@ def plot_ps(factory_length: float, factory_width: float, factory_height: float,
 
 
 def write_data(val, file):
+    """
+
+    Args:
+      val: 
+      file: 
+
+    Returns:
+
+    """
     data = open(file, 'w')
     data.write('SNR\n')
     data.close()
@@ -699,6 +768,25 @@ def plot_scenario_2d(factory_length: float, factory_width: float, factory_height
                      machine_list: List[Machine], ue_list: List[Ue], bs: BS,
                      distribution_class: Distribution, scenario_name: str, save_file: str = None, snr_list: list = None,
                      carrier_frequency_hz: list = None, x_y_list: list = None):
+    """
+
+    Args:
+      factory_length: float: 
+      factory_width: float: 
+      factory_height: float: 
+      machine_list: List[Machine]: 
+      ue_list: List[Ue]: 
+      bs: BS: 
+      distribution_class: Distribution: 
+      scenario_name: str: 
+      save_file: str:  (Default value = None)
+      snr_list: list:  (Default value = None)
+      carrier_frequency_hz: list:  (Default value = None)
+      x_y_list: list:  (Default value = None)
+
+    Returns:
+
+    """
     plt.plot((0, 0), (factory_width, 0), color='red')
     plt.plot((0, factory_length), (0, 0), color='red')
     plt.plot((factory_length, factory_length), (factory_width, 0), color='red')
@@ -821,6 +909,25 @@ def plot_scenario_2d2(factory_length: float, factory_width: float, factory_heigh
                       distribution_class: Distribution, scenario_name: str, save_file: str = None,
                       snr_list: list = None,
                       carrier_frequency_hz: list = None, x_y_list: list = None):
+    """
+
+    Args:
+      factory_length: float: 
+      factory_width: float: 
+      factory_height: float: 
+      machine_list: List[Machine]: 
+      ue_list: List[Ue]: 
+      bs: BS: 
+      distribution_class: Distribution: 
+      scenario_name: str: 
+      save_file: str:  (Default value = None)
+      snr_list: list:  (Default value = None)
+      carrier_frequency_hz: list:  (Default value = None)
+      x_y_list: list:  (Default value = None)
+
+    Returns:
+
+    """
     plt.plot((0, 0), (factory_width, 0), color='red')
     plt.plot((0, factory_length), (0, 0), color='red')
     plt.plot((factory_length, factory_length), (factory_width, 0), color='red')
@@ -918,6 +1025,22 @@ def plot_scenario_2d2(factory_length: float, factory_width: float, factory_heigh
 def plot_factory_los_nlos(factory_length: float, factory_width: float, factory_height: float,
                           machine_list: List[Machine], ue_list: List[Ue], bs: BS,
                           distribution_class: Distribution, scenario_name: str, save_file: str = None):
+    """
+
+    Args:
+      factory_length: float: 
+      factory_width: float: 
+      factory_height: float: 
+      machine_list: List[Machine]: 
+      ue_list: List[Ue]: 
+      bs: BS: 
+      distribution_class: Distribution: 
+      scenario_name: str: 
+      save_file: str:  (Default value = None)
+
+    Returns:
+
+    """
     fig = plt.figure()
     ax = fig.add_subplot(projection='3d')
 
@@ -1034,6 +1157,23 @@ def plot_factory_los_nlos(factory_length: float, factory_width: float, factory_h
 def plot_factory_los_nlos_ue_ue(factory_length: float, factory_width: float, factory_height: float,
                                 machine_list: List[Machine], ue_list: List[Ue], bs: BS,
                                 distribution_class: Distribution, scenario_name: str, k: int, save_file: str = None):
+    """
+
+    Args:
+      factory_length: float: 
+      factory_width: float: 
+      factory_height: float: 
+      machine_list: List[Machine]: 
+      ue_list: List[Ue]: 
+      bs: BS: 
+      distribution_class: Distribution: 
+      scenario_name: str: 
+      k: int: 
+      save_file: str:  (Default value = None)
+
+    Returns:
+
+    """
     fig = plt.figure()
     ax = fig.add_subplot(projection='3d')
 
@@ -1154,6 +1294,25 @@ def plot_scenario_2d_los_nlos(factory_length: float, factory_width: float, facto
                               distribution_class: Distribution, scenario_name: str, save_file: str = None,
                               snr_list: list = None,
                               carrier_frequency_hz: list = None, x_y_list: list = None):
+    """
+
+    Args:
+      factory_length: float: 
+      factory_width: float: 
+      factory_height: float: 
+      machine_list: List[Machine]: 
+      ue_list: List[Ue]: 
+      bs: BS: 
+      distribution_class: Distribution: 
+      scenario_name: str: 
+      save_file: str:  (Default value = None)
+      snr_list: list:  (Default value = None)
+      carrier_frequency_hz: list:  (Default value = None)
+      x_y_list: list:  (Default value = None)
+
+    Returns:
+
+    """
     plt.plot((0, 0), (factory_width, 0), color='red')
     plt.plot((0, factory_length), (0, 0), color='red')
     plt.plot((factory_length, factory_length), (factory_width, 0), color='red')
@@ -1244,6 +1403,26 @@ def plot_scenario_2d_los_nlos_ue_ue(factory_length: float, factory_width: float,
                                     distribution_class: Distribution, scenario_name: str, k: int, save_file: str = None,
                                     snr_list: list = None,
                                     carrier_frequency_hz: list = None, x_y_list: list = None):
+    """
+
+    Args:
+      factory_length: float: 
+      factory_width: float: 
+      factory_height: float: 
+      machine_list: List[Machine]: 
+      ue_list: List[Ue]: 
+      bs: BS: 
+      distribution_class: Distribution: 
+      scenario_name: str: 
+      k: int: 
+      save_file: str:  (Default value = None)
+      snr_list: list:  (Default value = None)
+      carrier_frequency_hz: list:  (Default value = None)
+      x_y_list: list:  (Default value = None)
+
+    Returns:
+
+    """
     plt.plot((0, 0), (factory_width, 0), color='red')
     plt.plot((0, factory_length), (0, 0), color='red')
     plt.plot((factory_length, factory_length), (factory_width, 0), color='red')

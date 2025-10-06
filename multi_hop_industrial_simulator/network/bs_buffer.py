@@ -3,9 +3,7 @@ from multi_hop_industrial_simulator.network.packet import Packet
 
 
 class BsBuffer:
-    """
-        This class implements a BS buffer, i.e., a collection of packets.
-    """
+    """This class implements a BS buffer, i.e., a collection of packets."""
 
     def __init__(self):
         self.buffer_packet_list = []  # Contains all generated and not yet sent packets
@@ -20,8 +18,13 @@ class BsBuffer:
         self.max_buffer_size = 10000000000000000000000  # bytes
 
     def add_packet(self, packet: Packet):
-        """
-            Add a new packet to the buffer, updating the buffer size, if the buffer is not full
+        """Add a new packet to the buffer, updating the buffer size, if the buffer is not full
+
+        Args:
+          packet: Packet: 
+
+        Returns:
+
         """
         if self.buffer_size + packet.packet_size < self.max_buffer_size:
             self.buffer_packet_list.append(packet)

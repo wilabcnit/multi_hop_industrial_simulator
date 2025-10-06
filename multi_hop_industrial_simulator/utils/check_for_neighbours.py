@@ -13,6 +13,26 @@ def check_for_neighbours(ue_array: ndarray, machine_array: ndarray, bs: BS, inpu
                          input_apply_fading: bool, input_clutter_density: float, input_shadowing_sample_index: int,
                          use_huawei_measurements: bool, input_average_clutter_height_m: float,
                          antenna_gain_model: str = None):
+    """
+
+    Args:
+      ue_array: ndarray: 
+      machine_array: ndarray: 
+      bs: BS: 
+      input_snr_threshold_db: float: 
+      input_thz_channel: THzChannel: 
+      input_carrier_frequency_ghz: float: 
+      input_bandwidth_hz: float: 
+      input_apply_fading: bool: 
+      input_clutter_density: float: 
+      input_shadowing_sample_index: int: 
+      use_huawei_measurements: bool: 
+      input_average_clutter_height_m: float: 
+      antenna_gain_model: str:  (Default value = None)
+
+    Returns:
+
+    """
 
     neighbours_found = False
     n_connected = 0

@@ -14,13 +14,7 @@ from multi_hop_industrial_simulator.utils.read_input_file import read_input_file
 
 class THzChannel:
     """
-    Implementing the THz channel
-
-    Attributes
-    ----------
-    params : dict
-        Parameters of the simulation.
-
+        Implementing the THz channel
     """
 
     def __init__(self, params):
@@ -39,8 +33,16 @@ class THzChannel:
         self.fading_param = self.params.get('channel').get('fading_param')
         self.shadowing_samples_array_db = []  # Array of shadowing samples in dB
 
-    # Get the Friis path loss in dB given the distance in meters
     def get_friis_path_loss_db(self, tx_rx_distance_m: float):
+        """
+
+        Args:
+          tx_rx_distance_m: float: distance between transmitter and receiver in meters
+
+        Returns:
+            Friis path loss in dB given the distance in meters
+
+        """
 
         # Constants
         c = ct.speed_of_light
@@ -51,10 +53,28 @@ class THzChannel:
         l_1 = 10 * self.path_loss_exponent * log10(tx_rx_distance_m)
         return l_0 + l_1
 
-    # Get the 3GPP path loss in dB given the distance in meters and the carrier frequency in GHz
     def get_3gpp_path_loss_db(self, tx, rx, carrier_frequency_ghz: float, tx_rx_distance_m: float,
                               apply_fading: bool, clutter_density: float, input_shadowing_sample_index: int,
                               los_cond: str, use_huawei_measurements: bool, input_average_clutter_height_m: float):
+        """
+
+        Args:
+          tx: UE or BS (transmitter)
+          rx: BS or UE (receiver)
+          carrier_frequency_ghz: float: frequency of carrier in GHz
+          tx_rx_distance_m: float: distance between transmitter and receiver in meters
+          apply_fading: bool: whether to apply fading
+          clutter_density: float: density of obstacles in the reference environment
+          input_shadowing_sample_index: int: index of shadowing sample in the array of values
+          los_cond: str: Line of Sight or Non LoS condition
+          use_huawei_measurements: bool: True if channel model experimentally derived by Huawei measurements;
+                                         False if 3GPP TR 38.901 channel model
+          input_average_clutter_height_m: float: average height of clutter in meters
+
+        Returns:
+            3GPP path loss in dB given the distance in meters and the carrier frequency in GHz
+
+        """
         # Obtain shadowing sample
         xi = self.shadowing_samples_array_db[input_shadowing_sample_index]
 
@@ -113,8 +133,10 @@ class THzChannel:
 
         return path_loss_db
 
-    # Get the molecular absorption coefficients in a DataFrame
     def get_molecular_absorption_coefficients_df(self):
+        """
+        Returns: molecular absorption coefficients in a DataFrame
+        """
         # Create a step function for the molecular absorption coefficients
         # Assuming constant values between two frequencies f1 and f2, as K1 in [f1,(f1+f2)/2] and K2 in [(f1+f2)/2, f2]
         frequency_middle_point_list = []
@@ -136,8 +158,17 @@ class THzChannel:
         return pd.DataFrame({self.molecular_coefficients_df_column_names[0]: frequency_middle_point_list,
                              self.molecular_coefficients_df_column_names[1]: molecular_absorption_coefficient_list})
 
-    # Get the molecular absorption coefficients and the corresponding frequency intervals
     def get_molecular_absorption_coefficients(self, carrier_frequency_hz: float, bandwidth_hz: float):
+        """
+
+        Args:
+          carrier_frequency_hz: float: frequency of the carrier in Hz
+          bandwidth_hz: float: bandwidth of the carrier in Hz
+
+        Returns:
+            molecular absorption coefficients and the corresponding frequency intervals
+
+        """
 
         # Calculate the lower and upper bounds of the frequency interval
         lower_bound = carrier_frequency_hz - bandwidth_hz / 2
@@ -188,10 +219,21 @@ class THzChannel:
 
         return frequency_intervals_list, molecular_absorption_coefficient_list
 
-    # Compute the integral over the bandwidth in dB
     def compute_integral_over_bandwidth_db(self, frequency_intervals_list_hz: List[Tuple[float, float]],
                                            molecular_absorption_coefficient_list: List[float],
                                            tx_rx_distance_m: float):
+        """
+
+        Args:
+          frequency_intervals_list_hz: List[Tuple[float, float]]: list of frequency intervals in Hz [starting frequency,
+          ending frequency]
+          molecular_absorption_coefficient_list: List[float]: list of molecular absorption coefficients
+          tx_rx_distance_m: float: distance between the transmitter and the receiver in meters
+
+        Returns:
+            integral over the bandwidth in dB
+
+        """
         integral_over_bandwidth = 0.0
         for frequency_interval, molecular_absorption_coefficient in zip(frequency_intervals_list_hz,
                                                                         molecular_absorption_coefficient_list):
@@ -201,9 +243,20 @@ class THzChannel:
 
         return 10 * log10(integral_over_bandwidth)
 
-    # Get the molecular noise power in dBW
     def get_molecular_noise_power_dbw(self, frequency_intervals_list_hz: List[Tuple[float, float]],
                                       molecular_absorption_coefficient_list: List[float], tx_rx_distance_m: float):
+        """
+
+        Args:
+          frequency_intervals_list_hz: List[Tuple[float, float]]: list of frequency intervals in Hz [starting frequency,
+          ending frequency]
+          molecular_absorption_coefficient_list: List[float]: list of molecular absorption coefficients
+          tx_rx_distance_m: float: distance between the transmitter and the receiver in meters
+
+        Returns:
+            molecular noise power in dBW
+
+        """
         molecular_noise_power = 0.0
         for frequency_interval, molecular_absorption_coefficient in zip(frequency_intervals_list_hz,
                                                                         molecular_absorption_coefficient_list):
@@ -216,12 +269,32 @@ class THzChannel:
 
         return 10 * log10(molecular_noise_power)
 
-    # Get the SNR in dB according to the 3GPP model
     def get_3gpp_snr_db(self, tx, rx, carrier_frequency_ghz: float, tx_rx_distance_m: float,
                         apply_fading: bool, bandwidth_hz: float, clutter_density: float,
                         input_shadowing_sample_index: int,  use_huawei_measurements: bool,
                         input_average_clutter_height_m: float, los_cond: str,
                         antenna_gain_model: str = None):
+        """
+
+        Args:
+          tx: UE or BS
+          rx: BS or UE
+          carrier_frequency_ghz: float: frequency of the carrier in GHz
+          tx_rx_distance_m: float: distance between the transmitter and the receiver in meters
+          apply_fading: bool: whether to apply fading
+          bandwidth_hz: float: bandwidth of the carrier in Hz
+          clutter_density: float: density of obstacles in the reference environment
+          input_shadowing_sample_index: int: index of input shadowing sample in the array of values
+          use_huawei_measurements: bool: True if channel model experimentally derived by Huawei measurements;
+                                         False if 3GPP TR 38.901 channel model
+          input_average_clutter_height_m: float: average height of the clutter in meters
+          los_cond: str: Line of Sight or Non LoS condition
+          antenna_gain_model: str: model of the antenna gain (if specified as input, Default value = None)
+
+        Returns:
+            SNR in dB according to the 3GPP model
+
+        """
 
         path_loss_db = self.get_3gpp_path_loss_db(tx=tx, rx=rx, carrier_frequency_ghz=carrier_frequency_ghz,
                                                   tx_rx_distance_m=tx_rx_distance_m,
@@ -259,12 +332,32 @@ class THzChannel:
                   rx_antenna_gain_db - path_loss_db - noise_power_dbw)
         return snr_db
 
-    # Get the received power in dB according to the 3GPP model
     def get_3gpp_prx_db(self, tx, rx, carrier_frequency_ghz: float, tx_rx_distance_m: float,
                         apply_fading: bool, bandwidth_hz: float, clutter_density: float,
                         input_shadowing_sample_index: int,  use_huawei_measurements: bool,
                         input_average_clutter_height_m: float, los_cond: str,
                         antenna_gain_model: str = None):
+        """
+
+        Args:
+          tx: UE or BS
+          rx: BS or UE
+          carrier_frequency_ghz: float: frequency of the carrier in GHz
+          tx_rx_distance_m: float: distance between the transmitter and receiver in meters
+          apply_fading: bool: whether to apply fading
+          bandwidth_hz: float: bandwidth of the transmitter in GHz
+          clutter_density: float: density of obstacles within the reference environment
+          input_shadowing_sample_index: int: index of the shadowing sample in the array of values
+          use_huawei_measurements: bool: True if channel model experimentally derived by Huawei measurements;
+                                         False if 3GPP TR 38.901 channel model
+          input_average_clutter_height_m: float: average clutter height in meters
+          los_cond: str: Line of Sight or Non LoS condition
+          antenna_gain_model: str: model of the antenna gain (if specified as input, Default value = None)
+
+        Returns:
+            received power in dB according to the 3GPP model
+
+        """
 
         # Compute path loss
         path_loss_db = self.get_3gpp_path_loss_db(tx=tx, rx=rx, carrier_frequency_ghz=carrier_frequency_ghz,
@@ -306,6 +399,28 @@ class THzChannel:
                         input_shadowing_sample_index: int,  use_huawei_measurements: bool,
                         input_average_clutter_height_m: float, los_cond: str,
                         antenna_gain_model: str = None):
+        """
+
+        Args:
+          tx: UE or BS
+          rx: BS or UE
+          carrier_frequency_ghz: float: frequency of the carrier in GHz
+          tx_rx_distance_m: float: distance of the transmitter and the receiver in meters
+                    apply_fading: bool: whether to apply fading
+          apply_fading: bool: whether to apply fading
+          bandwidth_hz: float: bandwidth of the transmitter in GHz
+          clutter_density: float: density of obstacles within the reference environment
+          input_shadowing_sample_index: int: index of the shadowing sample in the array of values
+          use_huawei_measurements: bool: True if channel model experimentally derived by Huawei measurements;
+                                         False if 3GPP TR 38.901 channel model
+          input_average_clutter_height_m: float: average clutter height in meters
+          los_cond: str: Line of Sight or Non LoS condition
+          antenna_gain_model: str: model of the antenna gain (if specified as input, Default value = None)
+
+        Returns:
+            received power in [W] according to the 3GPP model
+
+        """
         prx_db = self.get_3gpp_prx_db(tx, rx, carrier_frequency_ghz, tx_rx_distance_m,
                         apply_fading, bandwidth_hz, clutter_density,
                         input_shadowing_sample_index,  use_huawei_measurements,
@@ -315,9 +430,23 @@ class THzChannel:
 
         return prx_lin
 
-    # Get the SNR in dB
     def get_snr_db(self, ue: Ue, bs: BS, carrier_frequency_hz: float, bandwidth_hz: float, tx_rx_distance_m: float,
                    link_direction: str, apply_fading: bool):
+        """
+
+        Args:
+          ue: Ue (class)
+          bs: BS (class)
+          carrier_frequency_hz: float: carrier frequency in GHz
+          bandwidth_hz: float: bandwidth of the transmitter in GHz
+          tx_rx_distance_m: float: distance of the transmitter and the receiver in meters
+          link_direction: str: direction of the communication: "Uplink" or "Downlink"
+          apply_fading: bool: whether to apply fading
+
+        Returns:
+            SNR in dB
+
+        """
         frequency_intervals_list_hz, molecular_absorption_coefficient_list = (
             self.get_molecular_absorption_coefficients(carrier_frequency_hz=carrier_frequency_hz,
                                                        bandwidth_hz=bandwidth_hz))
@@ -332,10 +461,26 @@ class THzChannel:
         snr_db = received_power_dbw - noise_power_dbw
         return snr_db
 
-    # Get the SINR in dB
     def get_sinr_db(self, useful_ue: Ue, interfering_ues: List[Ue], bs: BS, carrier_frequency_hz: float,
                     bandwidth_hz: float, useful_tx_rx_distance_m: float, interfering_tx_rx_distance_m_list: List[float],
                     link_direction: str, apply_fading: bool):
+        """
+
+        Args:
+          useful_ue: Ue (class)
+          interfering_ues: List[Ue]: list of UEs interfering with the reference UE
+          bs: BS (class)
+          carrier_frequency_hz: float: carrier frequency, in Hz
+          bandwidth_hz: float: bandwidth in Hz
+          useful_tx_rx_distance_m: float: useful transmission distance in meters
+          interfering_tx_rx_distance_m_list: List[float]: distance between interfering transmitter and receiver in meters
+          link_direction: str: direction of transmission: "Uplink" or "Downlink"
+          apply_fading: bool: whether to apply fading or not
+
+        Returns:
+            SINR in dB
+
+        """
         # Compute the frequency channels and corresponding molecular absorption coefficient
         frequency_intervals_list_hz, molecular_absorption_coefficient_list = (
             self.get_molecular_absorption_coefficients(carrier_frequency_hz=carrier_frequency_hz,
@@ -367,10 +512,25 @@ class THzChannel:
 
         return sinr_db
 
-    # Get the received power in dBW
     def get_received_power_dbw(self, ue: Ue, bs: BS, bandwidth_hz: float, tx_rx_distance_m: float, link_direction: str,
                                apply_fading: bool, frequency_intervals_list_hz: List[Tuple[float, float]],
                                molecular_absorption_coefficient_list: List[float], ):
+        """
+
+        Args:
+          ue: Ue (class)
+          bs: BS (class)
+          bandwidth_hz: float: bandwidth in Hz
+          tx_rx_distance_m: float: distance between transmitter and receiver in meters
+          link_direction: str: direction of transmission: "Uplink" or "Downlink"
+          apply_fading: bool: whether to apply fading or not
+          frequency_intervals_list_hz: List[Tuple[float, float]]: list of frequency intervals at Hz
+          molecular_absorption_coefficient_list: List[float]: list of molecular absorption coefficients
+
+        Returns:
+            received power in dBW
+
+        """
 
         if link_direction == "uplink":
             tx = ue
@@ -411,14 +571,32 @@ class THzChannel:
 
         return received_power_dbw
 
-    # Get the thermal noise power in dBW
     def get_thermal_noise_power_dbw(self, input_noise_figure: float, bandwidth_hz: float):
+        """
+
+        Args:
+          input_noise_figure: float: noise figure in dB of the receiver
+          bandwidth_hz: float: bandwidth in Hz
+
+        Returns:
+            thermal noise power in dBW
+
+        """
         thermal_noise_dbw_power = 10 * log10(ct.Boltzmann * self.noise_temperature_k * input_noise_figure * bandwidth_hz)
 
         return thermal_noise_dbw_power
 
-    # Check if a signal is received or not given the SNR in dB
     def is_received(self, snr_db: float):
+        """
+
+        Args:
+          snr_db: float: measured SNR in dB at the receiver
+
+        Returns:
+            True, if a signal is received given the SNR in dB
+            False, otherwise
+
+        """
         if snr_db >= self.snr_threshold_db:
             is_received = True
         else:
@@ -426,25 +604,41 @@ class THzChannel:
 
         return is_received
 
-    # Get the shadowing standard deviation in dB
     def get_shadowing_std_dev_db(self):
+        """
+        Returns:
+            shadowing standard deviation in dB
+        """
         return self.shadowing_std_dev_db
 
-    # Get a Rayleigh fading sample in dB
     def get_fading_sample_db(self):
+        """
+        Returns: Rayleigh fading sample in dB
+        """
         fading_sample = np.random.rayleigh(scale=self.fading_param)
         return 20 * log10(fading_sample)
 
-    # Get the fading parameter
     def get_fading_param(self):
+        """
+        Returns:
+            fading parameter
+        """
         return self.fading_param
 
-    # Set the shadowing samples in dB
     def set_shadowing_sample_db(self, input_n_shadowing_samples: int):
+        """
+
+        Args:
+          input_n_shadowing_samples: int: number of shadowing samples
+
+        """
         self.shadowing_samples_array_db = np.random.normal(loc=0, scale=self.shadowing_std_dev_db,
                                                            size=input_n_shadowing_samples)
 
-    # Get a shadowing sample in dB
     def get_shadowing_sample_db(self):
+        """
+        Returns:
+            shadowing sample in dB
+        """
         shadowing_normal_sample = np.random.normal(loc=0, scale=1, size=None)
         return shadowing_normal_sample * self.shadowing_std_dev_db

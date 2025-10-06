@@ -6,6 +6,15 @@ from multi_hop_industrial_simulator.network.ue import Ue
 
 # Function to calculate and set the distance between each UE and the BS
 def set_ue_bs_distances(ue_list: List[Ue], bs: BS):
+    """
+
+    Args:
+      ue_list: List[Ue]: 
+      bs: BS: 
+
+    Returns:
+
+    """
 
     for index, ue in enumerate(ue_list):
         x = ue.get_coordinates()[0] - bs.get_coordinates()[0]

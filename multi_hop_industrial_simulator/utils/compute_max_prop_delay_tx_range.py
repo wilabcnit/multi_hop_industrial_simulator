@@ -11,6 +11,22 @@ def compute_max_prop_delay_tx_range(ue: Ue, bs: BS, input_thz_channel: THz_chann
                                     bandwidth_hz: float, carrier_frequency_ghz: float,
                                     snr_threshold_db: float, use_huawei_measurements: bool
                                     , enable_print: bool, antenna_gain_model: str = None):
+    """
+
+    Args:
+      ue: Ue: 
+      bs: BS: 
+      input_thz_channel: THz_channel: 
+      bandwidth_hz: float: 
+      carrier_frequency_ghz: float: 
+      snr_threshold_db: float: 
+      use_huawei_measurements: bool: 
+      enable_print: bool: 
+      antenna_gain_model: str:  (Default value = None)
+
+    Returns:
+
+    """
     # inserire metodi thz_channel e eliminare transceiver_params
     tx_power_dbm = ue.transceiver_params.get('Transmit power')
     tx_power_dbw = tx_power_dbm - 30

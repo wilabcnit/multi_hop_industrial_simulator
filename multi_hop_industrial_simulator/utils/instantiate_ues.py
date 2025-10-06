@@ -12,6 +12,20 @@ import math
 # Function to create the UEs with the correct type of traffic
 def instantiate_ues(input_params_dict: dict, tot_number_of_ues: int, starting_state: str, t_state_tick: int,
                     simulator_tick_duration: float, bit_rate_gbits: float, max_n_retx_per_packet: int):
+    """
+
+    Args:
+      input_params_dict: dict: 
+      tot_number_of_ues: int: 
+      starting_state: str: 
+      t_state_tick: int: 
+      simulator_tick_duration: float: 
+      bit_rate_gbits: float: 
+      max_n_retx_per_packet: int: 
+
+    Returns:
+
+    """
 
     percentage_of_ue_counter = 0
     ue_id = 0

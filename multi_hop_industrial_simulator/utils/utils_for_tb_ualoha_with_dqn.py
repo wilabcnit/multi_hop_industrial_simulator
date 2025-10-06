@@ -16,10 +16,30 @@ ack_bs_pr = 0.8
 
 # Function to compute the difference between two arrays
 def array_difference(arr1, arr2):
+    """
+
+    Args:
+      arr1: 
+      arr2: 
+
+    Returns:
+
+    """
     return np.setdiff1d(arr1, arr2)
 
 # Routing Function
 def get_max_index(neighbor, ack, prx, bs_seen):  # return the next_hop indices
+    """
+
+    Args:
+      neighbor: 
+      ack: 
+      prx: 
+      bs_seen: 
+
+    Returns:
+
+    """
     max_prx_indices = []
     max_index = None
 
@@ -94,6 +114,18 @@ def get_max_index(neighbor, ack, prx, bs_seen):  # return the next_hop indices
 
 # Function to select the input for the DRL agent
 def select_input_DRL(input_ack, input_prx, input_nodes_number, input_DRL_type_state, input_actions_list):
+    """
+
+    Args:
+      input_ack: 
+      input_prx: 
+      input_nodes_number: 
+      input_DRL_type_state: 
+      input_actions_list: 
+
+    Returns:
+
+    """
 
     # Check the state type
     if input_DRL_type_state == 1:
@@ -174,6 +206,15 @@ def select_input_DRL(input_ack, input_prx, input_nodes_number, input_DRL_type_st
 
 # Worker function to handle broadcast trasmsissions
 def broadcast_handling(obs_array, broadcast_response):
+    """
+
+    Args:
+      obs_array: 
+      broadcast_response: 
+
+    Returns:
+
+    """
     old_state = obs_array[0]
 
     for i in range(len(broadcast_response[0])):
@@ -194,6 +235,15 @@ def broadcast_handling(obs_array, broadcast_response):
 
 # Worker function to reset the TTL of a specific UE
 def ttl_reset(obs_array, address_index):  # mi serve
+    """
+
+    Args:
+      obs_array: 
+      address_index: 
+
+    Returns:
+
+    """
     obs_array[0][address_index] = 0
     obs_array[1][address_index] = 0
     obs_array[2][address_index] = 0
@@ -205,6 +255,16 @@ def ttl_reset(obs_array, address_index):  # mi serve
 
 # Worker function to compute the normalized linear interpolation
 def compute_normalized_linear_interpolation(x, x_min, x_max):
+    """
+
+    Args:
+      x: 
+      x_min: 
+      x_max: 
+
+    Returns:
+
+    """
 
     normalized_value = (x - x_min) / (x_max - x_min)
 

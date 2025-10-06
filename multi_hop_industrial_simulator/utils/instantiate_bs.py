@@ -10,6 +10,17 @@ import math
 
 # Function to create the BS with the correct type of traffic
 def instantiate_bs(input_params_dict: dict, simulator_tick_duration: float, starting_state: str, bit_rate_gbits: float):
+    """
+
+    Args:
+      input_params_dict: dict: 
+      simulator_tick_duration: float: 
+      starting_state: str: 
+      bit_rate_gbits: float: 
+
+    Returns:
+
+    """
     bs = None
 
     for key, values in input_params_dict.items():

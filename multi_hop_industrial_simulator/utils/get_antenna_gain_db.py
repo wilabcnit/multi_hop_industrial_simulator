@@ -9,6 +9,14 @@ from scipy import constants as ct
 
 # Function to compute the antenna gain in dB given the number of antenna elements
 def get_antenna_gain_db(number_of_antennas: int):
+    """
+
+    Args:
+      number_of_antennas: int: 
+
+    Returns:
+
+    """
 
     gain = 0
     if number_of_antennas == 1:

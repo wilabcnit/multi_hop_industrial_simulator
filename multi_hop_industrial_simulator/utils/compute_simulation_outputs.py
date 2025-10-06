@@ -10,6 +10,20 @@ from numpy import ndarray
 # Function to compute the outputs of the simulator
 def compute_simulator_outputs(ue_array: ndarray, bs: BS, simulation_time_s: float, inputs_dict: dict, output_dict: dict,
                               output_n_ue: int, output_n_sim: int):
+    """
+
+    Args:
+      ue_array: ndarray: 
+      bs: BS: 
+      simulation_time_s: float: 
+      inputs_dict: dict: 
+      output_dict: dict: 
+      output_n_ue: int: 
+      output_n_sim: int: 
+
+    Returns:
+
+    """
     # Metrics
     payload_fq_bytes = inputs_dict.get('traffic_fq').get('payload')
 

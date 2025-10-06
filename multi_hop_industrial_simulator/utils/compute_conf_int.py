@@ -5,6 +5,16 @@ from scipy import stats
 
 # Function to compute the 95% confidence interval for the metrics
 def compute_conf_int(output_dict, n_simulated_ues, n_simulations):
+    """
+
+    Args:
+      output_dict: 
+      n_simulated_ues: 
+      n_simulations: 
+
+    Returns:
+
+    """
 
     conf_int_results = {key: np.zeros((n_simulated_ues, 2)) for key in
                         output_dict.keys()}

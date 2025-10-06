@@ -10,9 +10,7 @@ from multi_hop_industrial_simulator.network.bs import BS
 from multi_hop_industrial_simulator.env.machine import Machine
 
 class Distribution:
-    """
-        Distribute devices on the environment and compute LoS condition.
-    """
+    """Distribute devices on the environment and compute LoS condition."""
 
     def __init__(self, ue_distribution_type: str, machine_distribution_type: str,
                  scenario_df: DataFrame = None,
@@ -24,8 +22,16 @@ class Distribution:
         # second row for BS coordinates
         self.number_of_ues = tot_number_of_ues
 
-    # Create the list of machines by distributing it in the space according to the input scenario
     def distribute_machines(self, scenario_df: DataFrame = None):
+        """
+
+        Args:
+          scenario_df: DataFrame:  Select one reference scenario to be deployed(Default value = None)
+
+        Returns:
+            list of machines by distributing it in the space according to the input scenario
+
+        """
         n_machines = sum(1 for idx in self.scenario_df.index if isinstance(idx, str) and idx.startswith("Machine"))
         self.number_of_machines = n_machines
         machine_array = np.empty(n_machines, dtype=object)
@@ -45,20 +51,33 @@ class Distribution:
 
         return machine_array
 
-    # Get the number of machines inside the environment
     def get_number_of_machines(self):
+        """
+        Returns: number of machines inside the environment
+        """
         return self.number_of_machines
 
-    # Distribute the UEs according to their distribution type
     def distribute_ues(self, ue_array: ndarray, machine_array: ndarray, bs: BS, simulator_tick_duration: float,
-                       factory_length: int = None, factory_width: int = None, factory_height: int = None):
+                       factory_length: float = None, factory_width: float = None):
+        """
+
+        Args:
+          ue_array: ndarray: array of UEs
+          machine_array: ndarray: array of machines
+          bs: BS: class
+          simulator_tick_duration: float: duration of simulation ticks
+          factory_length: int: length of the factory in meters (Default value = None)
+          factory_width: int: width of the factory in meters (Default value = None)
+
+        Distribute the UEs according to their distribution type
+
+        """
 
         # Distribute UEs within the factory
         if self.ue_distribution_type == "Uniform":
             # UEs distributed uniformly within the factory
             for ue in ue_array:
-                ue.set_coordinates(random.uniform(0, factory_length), random.uniform(0, factory_width),
-                                   0)  # random.uniform(0, factory_height))
+                ue.set_coordinates(random.uniform(0, factory_length), random.uniform(0, factory_width), 0)
 
         elif self.ue_distribution_type == "Grid":
             # Distribution taken from the input file
@@ -74,16 +93,33 @@ class Distribution:
         else:
             sys.exit('The UE distribution statistics is not recognized')
 
-    # Distribute the BS inside the environment
     def distribute_bs(self, bs: BS):
+        """
+
+        Args:
+          bs: BS: class
+
+        Distribute the BS inside the environment
+
+        """
         bs.set_coordinates(x_input=self.scenario_df.loc['BS', "X-center"],
                            y_input=self.scenario_df.loc['BS', "Y-center"],
                            z_input=self.scenario_df.loc['BS', "Height"])
 
-    # Set the overall number of UEs within the environment
     def set_number_of_ues(self, input_n_ues: int):
+        """
+
+        Args:
+          input_n_ues: int: input number of UEs
+
+        Returns:
+            overall number of UEs within the environment
+
+        """
         self.number_of_ues = input_n_ues
 
-    # Get the overall number of UEs within the environment
     def get_number_of_ues(self):
+        """
+        Returns: overall number of UEs within the environment
+        """
         return self.number_of_ues

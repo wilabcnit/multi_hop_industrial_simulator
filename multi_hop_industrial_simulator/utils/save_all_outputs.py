@@ -3,6 +3,15 @@ from datetime import datetime
 
 # Function to save all outputs of a simulation to a JSON file
 def save_all_outputs(inputs: dict, file_name: str):
+    """
+
+    Args:
+      inputs: dict: 
+      file_name: str: 
+
+    Returns:
+
+    """
 
     current_date = datetime.now()
 

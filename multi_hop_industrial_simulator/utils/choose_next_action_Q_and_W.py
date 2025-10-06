@@ -14,6 +14,22 @@ number_of_tx_data_per_step = inputs.get('rl').get('agent').get('number_of_tx_dat
 def choose_next_action_tb_with_RL_Q_and_W(input_ue: Ue, input_enable_print: bool = False, input_n_simulation: int = 0, input_n_simulations: int = 0,
                                           input_n_actions: int = 0, input_W_min: int = None, input_W_max: int = None,
                                           input_Q_min: int = None, input_Q_max: int = None, ):
+    """
+
+    Args:
+      input_ue: Ue: 
+      input_enable_print: bool:  (Default value = False)
+      input_n_simulation: int:  (Default value = 0)
+      input_n_simulations: int:  (Default value = 0)
+      input_n_actions: int:  (Default value = 0)
+      input_W_min: int:  (Default value = None)
+      input_W_max: int:  (Default value = None)
+      input_Q_min: int:  (Default value = None)
+      input_Q_max: int:  (Default value = None)
+
+    Returns:
+
+    """
 
     if input_enable_print:
         print("UE ", input_ue.get_ue_id(), " previous state: ", input_ue.Q_and_W_previous_state)
@@ -123,6 +139,23 @@ def choose_next_action_tb_with_RL_Q_and_W(input_ue: Ue, input_enable_print: bool
 def choose_next_action_tb_only_W(input_ue: Ue, input_enable_print: bool = False, input_n_simulation: int = 0, input_n_simulations: int = 0,
                                           input_n_actions: int = 0, input_W_min: int = None, input_W_max: int = None, input_goal_oriented:str = None,
                                           input_normalized_S:bool = False, input_current_tick: int = 0):
+    """
+
+    Args:
+      input_ue: Ue: 
+      input_enable_print: bool:  (Default value = False)
+      input_n_simulation: int:  (Default value = 0)
+      input_n_simulations: int:  (Default value = 0)
+      input_n_actions: int:  (Default value = 0)
+      input_W_min: int:  (Default value = None)
+      input_W_max: int:  (Default value = None)
+      input_goal_oriented:str:  (Default value = None)
+      input_normalized_S:bool:  (Default value = False)
+      input_current_tick: int:  (Default value = 0)
+
+    Returns:
+
+    """
 
 
     # Copy the current state to the previous state using deepcopy
@@ -261,6 +294,23 @@ def choose_next_action_tb_only_W(input_ue: Ue, input_enable_print: bool = False,
 def choose_next_action_tb_only_Q(input_ue: Ue, input_enable_print: bool = False, input_n_simulation: int = 0, input_n_simulations: int = 0,
                                           input_n_actions: int = 0, input_Q_min: int = None, input_Q_max: int = None, input_goal_oriented:str = None,
                                           input_normalized_S:bool = False, input_current_tick: int = 0):
+    """
+
+    Args:
+      input_ue: Ue: 
+      input_enable_print: bool:  (Default value = False)
+      input_n_simulation: int:  (Default value = 0)
+      input_n_simulations: int:  (Default value = 0)
+      input_n_actions: int:  (Default value = 0)
+      input_Q_min: int:  (Default value = None)
+      input_Q_max: int:  (Default value = None)
+      input_goal_oriented:str:  (Default value = None)
+      input_normalized_S:bool:  (Default value = False)
+      input_current_tick: int:  (Default value = 0)
+
+    Returns:
+
+    """
 
 
     # Copy the current state to the previous state using deepcopy

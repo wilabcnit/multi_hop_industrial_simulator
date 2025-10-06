@@ -56,6 +56,16 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
 # Function to move to the idle state
 def go_in_idle(input_ue: Ue, current_tick: int, input_enable_print: bool):
+    """
+
+    Args:
+      input_ue: Ue: 
+      current_tick: int: 
+      input_enable_print: bool: 
+
+    Returns:
+
+    """
     input_ue.set_state(input_state='IDLE')
     input_ue.set_state_duration(input_ticks=ue.get_next_packet_generation_instant())
     # Compute energy spent
@@ -69,6 +79,17 @@ def go_in_idle(input_ue: Ue, current_tick: int, input_enable_print: bool):
 # Get function of the BO state
 def get_backoff_duration(input_ue: Ue, input_contention_window_int: int, input_t_backoff_tick: int,
                          input_max_prop_delay_tick: int):
+    """
+
+    Args:
+      input_ue: Ue: 
+      input_contention_window_int: int: 
+      input_t_backoff_tick: int: 
+      input_max_prop_delay_tick: int: 
+
+    Returns:
+
+    """
     # The BO duration of a given UE is a function of its own retransmission pattern
     exp_backoff_factor = pow(2, input_ue.get_ul_buffer().get_first_packet().get_num_tx())
     if input_contention_window_int != 0:
@@ -83,6 +104,17 @@ def get_backoff_duration(input_ue: Ue, input_contention_window_int: int, input_t
 
 # Function to move to the BO state
 def go_in_backoff(input_ue: Ue, current_tick: int, input_backoff_duration_tick: int, input_enable_print: bool):
+    """
+
+    Args:
+      input_ue: Ue: 
+      current_tick: int: 
+      input_backoff_duration_tick: int: 
+      input_enable_print: bool: 
+
+    Returns:
+
+    """
     if input_ue.get_state() == 'WAIT_ACK':
         input_ue.ticks_in_WAIT_ACK.append(current_tick - input_ue.get_state_starting_tick())
     elif input_ue.get_state() == 'TX_ACK':
@@ -100,6 +132,16 @@ def go_in_backoff(input_ue: Ue, current_tick: int, input_backoff_duration_tick: 
 
 # Function to move to the TX_DATA state
 def go_in_tx_data(input_ue: Ue, current_tick: int, input_enable_print: bool):
+    """
+
+    Args:
+      input_ue: Ue: 
+      current_tick: int: 
+      input_enable_print: bool: 
+
+    Returns:
+
+    """
     if input_ue.get_state() == 'BO':
         input_ue.ticks_in_BO.append(current_tick - input_ue.get_state_starting_tick())
     elif input_ue.get_state() == 'TX_ACK':
@@ -170,6 +212,17 @@ def go_in_tx_data(input_ue: Ue, current_tick: int, input_enable_print: bool):
 
 #Function to move to the TX_ACK state
 def go_in_tx_ack(input_ue: Ue, current_tick: int, input_ack_duration_tick: int, input_enable_print: bool):
+    """
+
+    Args:
+      input_ue: Ue: 
+      current_tick: int: 
+      input_ack_duration_tick: int: 
+      input_enable_print: bool: 
+
+    Returns:
+
+    """
     if input_ue.get_state() == 'BO':
         input_ue.ticks_in_BO.append(current_tick - input_ue.get_state_starting_tick())
     elif input_ue.get_state() == 'WAIT_ACK':
@@ -191,6 +244,17 @@ def go_in_tx_ack(input_ue: Ue, current_tick: int, input_ack_duration_tick: int, 
 
 # Function to move to the TX_ACK state for the BS
 def go_in_tx_ack_bs(input_bs: BS, current_tick: int, input_ack_duration_tick: int, input_enable_print: bool):
+    """
+
+    Args:
+      input_bs: BS: 
+      current_tick: int: 
+      input_ack_duration_tick: int: 
+      input_enable_print: bool: 
+
+    Returns:
+
+    """
     input_bs.set_state(input_state='TX_ACK')
     input_bs.update_state_duration(input_ticks=input_ack_duration_tick)
     input_bs.set_start_tx_ack(input_start_tx_ack=current_tick)
@@ -201,6 +265,17 @@ def go_in_tx_ack_bs(input_bs: BS, current_tick: int, input_ack_duration_tick: in
 # Function to move to the WAIT_ACK state
 def go_in_wait_ack(input_ue: Ue, current_tick: int, input_wait_ack_duration_tick: int,
                    input_enable_print: bool = True):
+    """
+
+    Args:
+      input_ue: Ue: 
+      current_tick: int: 
+      input_wait_ack_duration_tick: int: 
+      input_enable_print: bool:  (Default value = True)
+
+    Returns:
+
+    """
     if input_ue.get_state() == 'TX_DATA':
         input_ue.ticks_in_TX_DATA.append(current_tick - input_ue.get_state_starting_tick())
     elif input_ue.get_state() == 'TX_ACK':
@@ -222,6 +297,17 @@ def go_in_wait_ack(input_ue: Ue, current_tick: int, input_wait_ack_duration_tick
 
 # Fucntion to move to the RX_ACK for the BS
 def go_rx_ack_bs(input_bs: BS, current_tick: int, input_rx_duration_tick: int, input_enable_print: bool = True):
+    """
+
+    Args:
+      input_bs: BS: 
+      current_tick: int: 
+      input_rx_duration_tick: int: 
+      input_enable_print: bool:  (Default value = True)
+
+    Returns:
+
+    """
     input_bs.set_state(input_state='RX')
     input_bs.set_state_duration(input_ticks=input_rx_duration_tick)
     # if input_enable_print:
@@ -229,6 +315,15 @@ def go_rx_ack_bs(input_bs: BS, current_tick: int, input_rx_duration_tick: int, i
 
 # Function to create the simulato timing structure
 def create_simulator_timing_structure(input_n_ue: int, input_simulation_duration_tick: int):
+    """
+
+    Args:
+      input_n_ue: int: 
+      input_simulation_duration_tick: int: 
+
+    Returns:
+
+    """
     output_simulator_timing_structure = {}
     for i in range(0, input_n_ue):
         ue_key = 'UE_' + str(i)
@@ -257,6 +352,15 @@ def create_simulator_timing_structure(input_n_ue: int, input_simulation_duration
 
 # Function to reset the simulator timing structure
 def reset_simulator_timing_structure(output_simulator_timing_structure: dict, input_simulation_duration_tick: int):
+    """
+
+    Args:
+      output_simulator_timing_structure: dict: 
+      input_simulation_duration_tick: int: 
+
+    Returns:
+
+    """
     for key_ext, value_ext in output_simulator_timing_structure.items():
         for key_int, value_int in value_ext['DATA_RX'].items():
             value_ext['DATA_RX'][key_int] = np.array([[input_simulation_duration_tick + 1] * 4],
@@ -270,6 +374,22 @@ def insert_item_in_timing_structure(input_simulator_timing_structure: dict, inpu
                                     input_final_tick: int, input_third_field: int, input_fourth_field: int,
                                     # Size for data, and UE ID for ACK
                                     input_tx_key: str, input_type_key: str, input_rx_key: str):
+    """
+
+    Args:
+      input_simulator_timing_structure: dict: 
+      input_starting_tick: int: 
+      input_final_tick: int: 
+      input_third_field: int: 
+      input_fourth_field: int: 
+      # Size for data: 
+      and UE ID for ACKinput_tx_key: str: 
+      input_type_key: str: 
+      input_rx_key: str: 
+
+    Returns:
+
+    """
     new_addition = np.array([input_starting_tick, input_final_tick, input_third_field, input_fourth_field])
     input_simulator_timing_structure[input_rx_key][input_type_key][input_tx_key] = (
         np.vstack([input_simulator_timing_structure[input_rx_key][input_type_key][input_tx_key], new_addition]))
@@ -277,12 +397,33 @@ def insert_item_in_timing_structure(input_simulator_timing_structure: dict, inpu
 # Function to remove an item from the simulator timing structure
 def remove_item_in_timing_structure(input_simulator_timing_structure: dict, input_tx_key: str, input_type_key: str,
                                     input_rx_key: str):
+    """
+
+    Args:
+      input_simulator_timing_structure: dict: 
+      input_tx_key: str: 
+      input_type_key: str: 
+      input_rx_key: str: 
+
+    Returns:
+
+    """
     # Always remove the second row, that is, the most recent reception from this specific TX
     input_simulator_timing_structure[input_rx_key][input_type_key][input_tx_key] = np.delete(
         input_simulator_timing_structure[input_rx_key][input_type_key][input_tx_key], 1, axis=0)
 
 # Function to find a data RX inside the simulator timing structure at a given tick for a given UE
 def find_data_rx_times_tick(input_simulator_timing_structure: dict, input_ue_id: int, current_tick: int):
+    """
+
+    Args:
+      input_simulator_timing_structure: dict: 
+      input_ue_id: int: 
+      current_tick: int: 
+
+    Returns:
+
+    """
     output_data_rx_at_ue_starting_tick = None
     output_data_rx_at_ue_ending_tick = None
     output_data_rx_at_ue_size_bytes = list()
@@ -309,6 +450,15 @@ def find_data_rx_times_tick(input_simulator_timing_structure: dict, input_ue_id:
 
 # Function to find a data RX inside the simulator timing structure at a given tick for the BS
 def find_data_rx_times_at_bs_tick(input_simulator_timing_structure: dict, current_tick: int):
+    """
+
+    Args:
+      input_simulator_timing_structure: dict: 
+      current_tick: int: 
+
+    Returns:
+
+    """
     output_data_rx_at_bs_starting_tick = None
     output_data_rx_at_bs_ending_tick = None
     output_data_rx_packet_id = list()
@@ -328,6 +478,15 @@ def find_data_rx_times_at_bs_tick(input_simulator_timing_structure: dict, curren
 
 # Function to find a ACK RX inside the simulator timing structure at a given tick for the BS
 def find_ack_rx_times_at_bs_tick(input_simulator_timing_structure: dict, current_tick: int):
+    """
+
+    Args:
+      input_simulator_timing_structure: dict: 
+      current_tick: int: 
+
+    Returns:
+
+    """
     output_ack_rx_at_bs_starting_tick = None
     output_ack_rx_at_bs_ending_tick = None
     output_ack_rx_at_bs_recipient_id_int = list()
@@ -371,6 +530,16 @@ def find_ack_rx_times_at_bs_tick(input_simulator_timing_structure: dict, current
 
 # Function to find a ACK RX inside the simulator timing structure at a given tick for the UE
 def find_ack_rx_times_tick(input_simulator_timing_structure: dict, input_ue_id: int, current_tick: int):
+    """
+
+    Args:
+      input_simulator_timing_structure: dict: 
+      input_ue_id: int: 
+      current_tick: int: 
+
+    Returns:
+
+    """
     output_ack_rx_at_ue_starting_tick = None
     output_ack_rx_at_ue_ending_tick = None
     output_ack_rx_packet_id = list()  # list of ack packet id

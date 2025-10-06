@@ -6,6 +6,7 @@
 
 
 class Packet:
+    """ """
 
     def __init__(self):
         self.ue_id = 0
@@ -45,9 +46,14 @@ class Packet:
 
 
     def update_data_to_be_sent(self, sent_data: float):
-        """
-            Update the Mb to sent to fully transmit this packet.
+        """Update the Mb to sent to fully transmit this packet.
             Returns 1 if the packet has been fully transmitted, 0 otherwise.
+
+        Args:
+          sent_data: float: 
+
+        Returns:
+
         """
         self.data_to_be_sent = max(0, int(self.data_to_be_sent - sent_data))
         if self.data_to_be_sent:
@@ -55,8 +61,13 @@ class Packet:
         return 1
 
     def update_pending_data(self, sent_data: float):
-        """
-            Update the pending data.
+        """Update the pending data.
+
+        Args:
+          sent_data: float: 
+
+        Returns:
+
         """
         remove_pending_size = min(self.pending_size, sent_data)
         self.pending_size -= remove_pending_size
@@ -68,124 +79,261 @@ class Packet:
 
     # Set the new packet to be sent
     def set_data_to_be_sent(self, data_to_be_sent):
+        """
+
+        Args:
+          data_to_be_sent: 
+
+        Returns:
+
+        """
         self.data_to_be_sent = data_to_be_sent
 
     # Get the new packet to be sent
     def get_data_to_be_sent(self):
+        """ """
         return self.data_to_be_sent
 
     # Get the packet transmission number
     def get_transmission_counter(self):
+        """ """
         return self.n_transmissions
 
     # Increment the packet transmission number
     def increment_transmission_counter(self):
+        """ """
         self.n_transmissions += 1
 
     # Set the UE_ID that is transmitting that packet
     def set_ue_id(self, input_ue_id: int):
+        """
+
+        Args:
+          input_ue_id: int: 
+
+        Returns:
+
+        """
         self.ue_id = input_ue_id
 
     # Get the UE_ID that is transmitting that packet
     def get_ue_id(self):
+        """ """
         return self.ue_id
 
     # Set the packet ID
     def set_id(self, input_packet_id: int):
+        """
+
+        Args:
+          input_packet_id: int: 
+
+        Returns:
+
+        """
         self.packet_id = input_packet_id
 
     # Get the packet ID
     def get_id(self):
+        """ """
         return self.packet_id
 
     # Set the ID of the UE from which this packet has been received
     def set_data_rx_from_ue(self, data_rx_from_ue: int):
+        """
+
+        Args:
+          data_rx_from_ue: int: 
+
+        Returns:
+
+        """
         self.data_rx_from_ue = data_rx_from_ue
 
     # Get the ID of the UE from which this packet has been received
     def get_data_rx_from_ue(self):
+        """ """
         return self.data_rx_from_ue
 
     # Set the ID of the packet received from a given UE
     def set_packet_id_rx_from_ue(self, packet_id_rx_from_ue: int):
+        """
+
+        Args:
+          packet_id_rx_from_ue: int: 
+
+        Returns:
+
+        """
         self.packet_id_rx_from_ue = packet_id_rx_from_ue
 
     # Get the ID of the packet received from a given UE
     def get_packet_id_rx_from_ue(self):
+        """ """
         return self.packet_id_rx_from_ue
 
     def set_size(self, input_size: int):
+        """
+
+        Args:
+          input_size: int: 
+
+        Returns:
+
+        """
         self.packet_size = input_size
 
     def get_size(self):
+        """ """
         return self.packet_size
 
     # Set the size of the packet for ON traffic
     def set_size_on(self, input_size: int):
+        """
+
+        Args:
+          input_size: int: 
+
+        Returns:
+
+        """
         self.packet_size_on = input_size
 
     # Get the size of the packet for ON traffic
     def get_size_on(self):
+        """ """
         return self.packet_size_on
 
     # Set the size of the packet for standby traffic
     def set_size_standby(self, input_size: int):
+        """
+
+        Args:
+          input_size: int: 
+
+        Returns:
+
+        """
         self.packet_size_standby = input_size
 
     # Get the size of the packet for standby traffic
     def get_size_standby(self):
+        """ """
         return self.packet_size_standby
 
     # Set the time instant when the packet has been received
     def set_arrival_time(self, input_arrival_time: int):
+        """
+
+        Args:
+          input_arrival_time: int: 
+
+        Returns:
+
+        """
         self.arrival_time = input_arrival_time
 
     # Get the time instant when the packet has been received
     def get_arrival_time(self):
+        """ """
         return self.arrival_time
 
     # Set the time instant when the packet has been generated
     def set_generation_time(self, input_generation_time: int):
+        """
+
+        Args:
+          input_generation_time: int: 
+
+        Returns:
+
+        """
         self.generation_time = input_generation_time
 
     # Get the time instant when the packet has been generated
     def get_generation_time(self):
+        """ """
         return self.generation_time
 
     # True if the data will be forwarded
     def set_data_to_be_forwarded_bool(self, input_data_to_be_forwarded_bool: bool):
+        """
+
+        Args:
+          input_data_to_be_forwarded_bool: bool: 
+
+        Returns:
+
+        """
         self.data_to_be_forwarded_bool = input_data_to_be_forwarded_bool
 
     # Get the bool value of the variable indicating if a data will be forwarded or not
     def get_data_to_be_forwarded_bool(self):
+        """ """
         return self.data_to_be_forwarded_bool
 
     # True if the data will be sent with an unicast address
     def set_data_unicast(self, input_data_unicast: bool):
+        """
+
+        Args:
+          input_data_unicast: bool: 
+
+        Returns:
+
+        """
         self.unicast = input_data_unicast
 
     # Get the bool variable indicating if the data is sent with unicast address or not
     def get_data_unicast(self):
+        """ """
         return self.unicast
 
     # Set the packet time duration
     def set_packet_duration_s(self, input_packet_duration_s: float):
+        """
+
+        Args:
+          input_packet_duration_s: float: 
+
+        Returns:
+
+        """
         self.packet_duration_s = input_packet_duration_s
 
     # Get the packet time duration
     def get_packet_duration_s(self):
+        """ """
         return self.packet_duration_s
 
     # Set the packet duration in tick
     def set_packet_duration_tick(self, input_packet_duration_tick: int):
+        """
+
+        Args:
+          input_packet_duration_tick: int: 
+
+        Returns:
+
+        """
         self.packet_duration_tick = input_packet_duration_tick
 
     # Get the packet duration in tick
     def get_packet_duration_tick(self):
+        """ """
         return self.packet_duration_tick
 
     # Set the number of transmission attempts for the packet
     def set_num_tx(self, input_num_tx: int, input_enable_print: bool = None):
+        """
+
+        Args:
+          input_num_tx: int: 
+          input_enable_print: bool:  (Default value = None)
+
+        Returns:
+
+        """
         self.num_tx = input_num_tx
         if input_enable_print:
             print('UE ', self.get_ue_id(), ' has updated the number of tx attempts of packet with ID ', self.get_id(),
@@ -193,89 +341,180 @@ class Packet:
 
     # Get the number of transmission attempts for the packet
     def get_num_tx(self):
+        """ """
         return self.num_tx
 
     # Set the maximum number of transmission attempts for the packet
     def set_max_n_retx(self, input_max_n_retx: int):
+        """
+
+        Args:
+          input_max_n_retx: int: 
+
+        Returns:
+
+        """
         self.max_n_retx = input_max_n_retx
 
     # Get the maximum number of transmission attempts for the packet
     def get_max_n_retx(self):
+        """ """
         return self.max_n_retx
 
     # Set to True if the ACK for that given packet has been received or not
     def set_ack_rx(self, ack_rx: bool):
+        """
+
+        Args:
+          ack_rx: bool: 
+
+        Returns:
+
+        """
         self.ack_rx = ack_rx
 
     # Get the value of the variable representing if an ACK for that packet has been received or not
     def get_ack_rx(self):
+        """ """
         return self.ack_rx
 
     # Set to True if that packet has been retransmitted or not
     def set_retransmission_packets(self, retransmission_bool: bool):
+        """
+
+        Args:
+          retransmission_bool: bool: 
+
+        Returns:
+
+        """
         self.retransmission_of_packets = retransmission_bool
 
     # Get the value of the variable representing if the packet has been retransmitted or not
     def get_retransmission_packets(self):
+        """ """
         return self.retransmission_of_packets
 
     # Set to True if that packet has been discarded or not
     def set_packet_discarded(self, discarded_bool: bool):
+        """
+
+        Args:
+          discarded_bool: bool: 
+
+        Returns:
+
+        """
         self.discarded_packet = discarded_bool
 
     # Get the value of the variable representing if the packet has been discarded or not
     def get_packet_discarded(self):
+        """ """
         return self.discarded_packet
 
     # Set the sequence number of the packet
     def set_sequence_number(self, input_sequence_number: int):
+        """
+
+        Args:
+          input_sequence_number: int: 
+
+        Returns:
+
+        """
         self.sequence_number = input_sequence_number
 
     # Get the sequence number of the packet
     def get_sequence_number(self):
+        """ """
         return self.sequence_number
 
     ############################ Multi-Hop Implementation ############################
     # Set the number of hops crossed by the packet
     def set_hop_count(self, hop_count: int):
+        """
+
+        Args:
+          hop_count: int: 
+
+        Returns:
+
+        """
         self.hop_count = hop_count
 
     # Get the number of hops crossed by the packet
     def get_hop_count(self):
+        """ """
         return self.hop_count
 
     # Set the ID of the UE that has generated the packet
     def set_generated_by_ue(self, generated_by_ue: int):
+        """
+
+        Args:
+          generated_by_ue: int: 
+
+        Returns:
+
+        """
         self.generated_by_ue = generated_by_ue
 
     # Get the ID of the UE that has generated the packet
     def get_generated_by_ue(self):
+        """ """
         return self.generated_by_ue
 
     # Set the packet generation instant of time in tick
     def set_generated_by_ue_time_instant_tick(self, tick_packet_generated_by_ue: int):
+        """
+
+        Args:
+          tick_packet_generated_by_ue: int: 
+
+        Returns:
+
+        """
         self.tick_packet_generated_by_ue = tick_packet_generated_by_ue
 
     # Get the packet generation instant of time in tick
     def get_generated_by_ue_time_instant_tick(self):
+        """ """
         return self.tick_packet_generated_by_ue
 
     # Keep track of the original ID of the packet before it will take another ID due to forwarding
     # (as soon as a UE will put in the queue a packet to forward, it will assign a new ID to its packet to avoid
     # confusion with the ID of the packets already in its queue)
     def set_packet_id_generator(self, packet_id_generator: int):
+        """
+
+        Args:
+          packet_id_generator: int: 
+
+        Returns:
+
+        """
         self.packet_id_generator = packet_id_generator
 
     # Get the ID of the packet before it will be forwarded
     def get_packet_id_generator(self):
+        """ """
         return self.packet_id_generator
 
     # Set the address of that packet ('BS', the ID of a given UE, the broadcast address)
     def set_address(self, address):
+        """
+
+        Args:
+          address: 
+
+        Returns:
+
+        """
         self.address = address
 
     # Get the packet address
     def get_address(self):
+        """ """
         return self.address
     ########################### End Multi-Hop Implementation ###########################
 

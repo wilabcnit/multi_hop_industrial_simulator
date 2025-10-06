@@ -24,8 +24,18 @@ loss_fn = tf.keras.losses.Huber()  # tf.keras.losses.MeanSquaredError()
 
 
 ######## Utility functions of the RL agent ########
-# Build the DNN model for the DQN agent
+
 def get_model(input_n_actions, input_n_nodes):
+    """
+
+    Args:
+      input_n_actions: number of actions
+      input_n_nodes: number of UEs
+
+    Returns:
+        DNN model for the DQN agent
+
+    """
     model = tf.keras.Sequential([
         tf.keras.layers.Dense(32, activation="elu", input_shape=(input_n_nodes,)),
         tf.keras.layers.Dense(32, activation="elu"),
@@ -33,9 +43,17 @@ def get_model(input_n_actions, input_n_nodes):
     ])
     return model
 
-
-# Build the Dueling DNN model for the DQN agent
 def get_dueling_model(input_n_actions, input_n_nodes):
+    """
+
+    Args:
+      input_n_actions: number of actions
+      input_n_nodes: number of UEs
+
+    Returns:
+        Dueling DNN model for the DQN agent
+
+    """
     # Input Layer
     inputs = layers.Input(shape=(input_n_nodes,))
 
@@ -57,9 +75,20 @@ def get_dueling_model(input_n_actions, input_n_nodes):
 
     return model
 
-
-# Choose the action based on the epsilon-greedy policy
 def epsilon_greedy_policy(state, input_n_actions, model, categorical_dqn=None, input_epsilon=0):
+    """
+
+    Args:
+      state: 
+      input_n_actions: 
+      model: 
+      categorical_dqn:  (Default value = None)
+      input_epsilon:  (Default value = 0)
+
+    Returns:
+        action based on the epsilon-greedy policy
+
+    """
     if np.random.rand() < input_epsilon:
         return np.random.randint(input_n_actions)  # random action
     else:
@@ -78,6 +107,15 @@ def epsilon_greedy_policy(state, input_n_actions, model, categorical_dqn=None, i
 
 # Sample experiences from the replay buffer
 def sample_experiences(input_batch_size, replay_buffer):
+    """
+
+    Args:
+      input_batch_size: 
+      replay_buffer: 
+
+    Returns:
+
+    """
     indices = np.random.randint(len(replay_buffer), size=input_batch_size)
     batch = [replay_buffer[index] for index in indices]
 
@@ -91,6 +129,15 @@ def sample_experiences(input_batch_size, replay_buffer):
 
 # Update the target model with the weights of the main model
 def update_target_model(input_main_model, input_target_model):
+    """
+
+    Args:
+      input_main_model: 
+      input_target_model: 
+
+    Returns:
+
+    """
     input_target_model.set_weights(input_main_model.get_weights())
     return input_target_model
 
@@ -99,6 +146,18 @@ def update_target_model(input_main_model, input_target_model):
 
 # Training step for Double DQN
 def training_step(input_batch_size, input_n_actions, input_replay_buffer, input_model, input_target_model):
+    """
+
+    Args:
+      input_batch_size: 
+      input_n_actions: 
+      input_replay_buffer: 
+      input_model: 
+      input_target_model: 
+
+    Returns:
+
+    """
     # Sample experiences from the replay buffer
     experiences = sample_experiences(input_batch_size, input_replay_buffer)
     states, actions, output_rewards, next_states, dones = experiences
@@ -149,6 +208,7 @@ def training_step(input_batch_size, input_n_actions, input_replay_buffer, input_
 
 # Noisy Network for Rainbow DQN
 class NoisyNetwork(tf.keras.layers.Layer):
+    """ """
     def __init__(self, input_dim, output_dim, stddev=0.017, activation=None):
         super(NoisyNetwork, self).__init__()
         self.input_dim = input_dim
@@ -183,6 +243,15 @@ class NoisyNetwork(tf.keras.layers.Layer):
         )
 
     def call(self, inputs, training=None):
+        """
+
+        Args:
+          inputs: 
+          training:  (Default value = None)
+
+        Returns:
+
+        """
         if training:
             epsilon_w = tf.random.normal(shape=(self.input_dim, self.output_dim))
             epsilon_b = tf.random.normal(shape=(self.output_dim,))
@@ -203,6 +272,15 @@ class NoisyNetwork(tf.keras.layers.Layer):
 
 # Function to create a noisy model for Rainbow DQN
 def get_noisy_model(input_n_actions=2, input_n_nodes=4):
+    """
+
+    Args:
+      input_n_actions:  (Default value = 2)
+      input_n_nodes:  (Default value = 4)
+
+    Returns:
+
+    """
     inputs = tf.keras.Input(shape=(input_n_nodes,))
 
     x = NoisyNetwork(input_dim=input_n_nodes, output_dim=32, activation='elu')(inputs)
@@ -214,6 +292,7 @@ def get_noisy_model(input_n_actions=2, input_n_nodes=4):
 
 # Prioritized Experience Replay
 class PrioritizedReplayBuffer:
+    """ """
     def __init__(self, capacity, alpha=0.6):
         self.capacity = capacity
         self.alpha = alpha
@@ -222,6 +301,15 @@ class PrioritizedReplayBuffer:
         self.pos = 0
 
     def add(self, experience, priority):
+        """
+
+        Args:
+          experience: 
+          priority: 
+
+        Returns:
+
+        """
         max_priority = max(self.priorities.max(), 1.0)
         if len(self.buffer) < self.capacity:
             self.buffer.append(experience)
@@ -232,6 +320,15 @@ class PrioritizedReplayBuffer:
         self.pos = (self.pos + 1) % self.capacity
 
     def sample(self, batch_size, beta):
+        """
+
+        Args:
+          batch_size: 
+          beta: 
+
+        Returns:
+
+        """
         # Ensure priorities are clipped to avoid invalid values
         clipped_priorities = np.clip(self.priorities[:len(self.buffer)], a_min=1e-6, a_max=None)
         probs = clipped_priorities ** self.alpha
@@ -251,9 +348,7 @@ class PrioritizedReplayBuffer:
         return experiences, indices, np.array(weights, dtype=np.float32)
 
     def update_last_done(self):
-        """
-        Update the `done` status of the last inserted experience to True.
-        """
+        """Update the `done` status of the last inserted experience to True."""
         if len(self.buffer) > 0:
             # Update the last inserted tuple
             last_index = (self.pos - 1) % self.capacity
@@ -264,12 +359,31 @@ class PrioritizedReplayBuffer:
             self.buffer[last_index] = (state, action, reward, next_state, True)
 
     def update_priorities(self, indices, priorities):
+        """
+
+        Args:
+          indices: 
+          priorities: 
+
+        Returns:
+
+        """
         for idx, priority in zip(indices, priorities):
             self.priorities[idx] = priority
 
 
 # Multi-Step Learning
 def multi_step_return(rewards, gamma, n_steps):
+    """
+
+    Args:
+      rewards: 
+      gamma: 
+      n_steps: 
+
+    Returns:
+
+    """
     discounted_sum = 0.0
     for i in range(n_steps):
         discounted_sum += rewards[i] * (gamma ** i)
@@ -278,6 +392,7 @@ def multi_step_return(rewards, gamma, n_steps):
 
 # Distributional RL
 class CategoricalDQN:
+    """ """
     def __init__(self, n_actions, n_atoms, v_min, v_max):
         self.n_actions = n_actions
         self.n_atoms = n_atoms
@@ -287,6 +402,14 @@ class CategoricalDQN:
         self.z = np.linspace(v_min, v_max, n_atoms)
 
     def get_distributional_model(self, input_n_nodes):
+        """
+
+        Args:
+          input_n_nodes: 
+
+        Returns:
+
+        """
         inputs = layers.Input(shape=(input_n_nodes,))
         x = layers.Dense(32, activation="elu")(inputs)
         x = layers.Dense(32, activation="elu")(x)
@@ -297,6 +420,22 @@ class CategoricalDQN:
 
 # Rainbow DQN training step
 def rainbow_training_step(input_batch_size, replay_buffer, model, target_model, beta, n_actions, n_atoms, v_min, v_max):
+    """
+
+    Args:
+      input_batch_size: 
+      replay_buffer: 
+      model: 
+      target_model: 
+      beta: 
+      n_actions: 
+      n_atoms: 
+      v_min: 
+      v_max: 
+
+    Returns:
+
+    """
     delta_z = (v_max - v_min) / (n_atoms - 1)
     z = tf.linspace(v_min, v_max, n_atoms)  # Atom values
 
