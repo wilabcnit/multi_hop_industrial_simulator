@@ -7,30 +7,33 @@ from numpy import ndarray
 
 from multi_hop_industrial_simulator.channel_models.THz_channel import THzChannel
 
-# Function to check if UEs have neighbours or are connected to the BS
+
 def check_for_neighbours(ue_array: ndarray, machine_array: ndarray, bs: BS, input_snr_threshold_db: float,
                          input_thz_channel: THzChannel, input_carrier_frequency_ghz: float, input_bandwidth_hz: float,
                          input_apply_fading: bool, input_clutter_density: float, input_shadowing_sample_index: int,
                          use_huawei_measurements: bool, input_average_clutter_height_m: float,
                          antenna_gain_model: str = None):
     """
+    Method to check if UEs have neighbours or are connected to the BS ->
+    used to determine which UEs can directly reach the BS or not
 
     Args:
-      ue_array: ndarray: 
-      machine_array: ndarray: 
+      ue_array: ndarray: array of UEs
+      machine_array: ndarray: array of machines
       bs: BS: 
-      input_snr_threshold_db: float: 
-      input_thz_channel: THzChannel: 
-      input_carrier_frequency_ghz: float: 
-      input_bandwidth_hz: float: 
-      input_apply_fading: bool: 
-      input_clutter_density: float: 
-      input_shadowing_sample_index: int: 
-      use_huawei_measurements: bool: 
-      input_average_clutter_height_m: float: 
-      antenna_gain_model: str:  (Default value = None)
+      input_snr_threshold_db: float: SNR (or SINR) threshold for the input channel
+      input_thz_channel: THzChannel: channel model used
+      input_carrier_frequency_ghz: float: carrier frequency (GHz)
+      input_bandwidth_hz: float: bandwidth (Hz)
+      input_apply_fading: bool: True if there is fading; False otherwise
+      input_clutter_density: float: average clutter density
+      input_shadowing_sample_index: int: index of shadowing sample
+      use_huawei_measurements: bool: True if Huawei measurements are used; False otherwise
+      input_average_clutter_height_m: float: average clutter height (m)
+      antenna_gain_model: str:  (Default value = None) type of antenna gain model
 
     Returns:
+        None
 
     """
 

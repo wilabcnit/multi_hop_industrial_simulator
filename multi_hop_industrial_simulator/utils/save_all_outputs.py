@@ -1,15 +1,16 @@
 import json
 from datetime import datetime
 
-# Function to save all outputs of a simulation to a JSON file
 def save_all_outputs(inputs: dict, file_name: str):
     """
+    Saves all the outputs into a json file
 
     Args:
-      inputs: dict: 
-      file_name: str: 
+      inputs: dict: dictionary of inputs
+      file_name: str: name of output file
 
     Returns:
+        None
 
     """
 

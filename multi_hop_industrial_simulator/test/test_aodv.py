@@ -37,7 +37,7 @@ from multi_hop_industrial_simulator.utils.check_for_neighbours import check_for_
 
 from multi_hop_industrial_simulator.utils.set_ues_los_condition import set_ues_los_condition
 
-from multi_hop_industrial_simulator.utils.plot_data import plot_factory, plot_snr, plot_scenario_2d, write_data
+from multi_hop_industrial_simulator.utils.plot_data import plot_factory, plot_scenario_2d, write_data
 
 from collections import deque
 from multi_hop_industrial_simulator.utils.choose_next_action import choose_next_action_aodv
@@ -57,11 +57,12 @@ def go_in_idle(input_ue: Ue, current_tick: int, input_enable_print: bool):
     """
 
     Args:
-      input_ue: Ue: 
-      current_tick: int: 
-      input_enable_print: bool: 
+      input_ue: Ue:
+      current_tick: int: current tick of simulation
+      input_enable_print: bool: True if print enabled.
 
     Returns:
+        None
 
     """
     input_ue.set_state(input_state='IDLE')
@@ -79,7 +80,7 @@ def get_backoff_duration(input_ue: Ue, input_contention_window_int: int, input_t
 
     Args:
       input_ue: Ue: 
-      input_contention_window_int: int: 
+      input_contention_window_int: int: integer value representing the contention window size
       input_t_backoff_tick: int: 
       input_max_prop_delay_tick: int: 
 

@@ -7,14 +7,16 @@ import numpy as np
 from math import log10
 from scipy import constants as ct
 
-# Function to compute the antenna gain in dB given the number of antenna elements
+
 def get_antenna_gain_db(number_of_antennas: int):
     """
+    Computes the antenna gain in dB given the number of antennas.
 
     Args:
-      number_of_antennas: int: 
+      number_of_antennas: int: number of antennas
 
     Returns:
+        antenna gain in dB
 
     """
 

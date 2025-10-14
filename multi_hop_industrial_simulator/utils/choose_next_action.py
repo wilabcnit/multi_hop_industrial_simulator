@@ -18,9 +18,8 @@ DDQN_new_state = inputs.get('rl').get('agent').get('New_state')
 DRL_input_nodes_number = inputs.get('rl').get('agent').get('DRL_nodes_number')
 DRL_input_type_state = inputs.get('rl').get('agent').get('DRL_type_state')
 
-# Function to choose the next action to be taken by the UE  {unicast, broadcast, forced broadcast}
 def choose_next_action_tb_no_RL(input_ue: Ue, input_enable_print: bool = False):
-    """Choose the next action to be taken by the UE when the UE does not use RL
+    """Choose the next action to be taken by the UE when the UE does not use RL {unicast, broadcast, forced broadcast}
 
     Args:
       input_ue: UE object
@@ -33,7 +32,6 @@ def choose_next_action_tb_no_RL(input_ue: Ue, input_enable_print: bool = False):
 
     """
 
-    # mi serve
     counter_fw = 0
     for packet in input_ue.ul_buffer.buffer_packet_list:
         if packet.get_data_to_be_forwarded_bool() is True:
@@ -116,9 +114,8 @@ def choose_next_action_tb_no_RL(input_ue: Ue, input_enable_print: bool = False):
 
 ############### AODV ########################
 
-# Function to choose the next action to be taken by the UE  with the AODV protocol
 def choose_next_action_aodv(input_ue: Ue, input_enable_print: bool = False):
-    """Choose the next action to be taken by the UE when the UE does not use RL
+    """Choose the next action to be taken by the UE when the UE does not use RL and the protocol is AODV
 
     Args:
       input_ue: UE object

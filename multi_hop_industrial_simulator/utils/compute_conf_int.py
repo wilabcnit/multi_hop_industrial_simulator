@@ -8,11 +8,12 @@ def compute_conf_int(output_dict, n_simulated_ues, n_simulations):
     """
 
     Args:
-      output_dict: 
-      n_simulated_ues: 
-      n_simulations: 
+      output_dict: dictionary contained performance metrics computed
+      n_simulated_ues: number of UEs simulated
+      n_simulations: number of simulations done
 
     Returns:
+        the confidence interval
 
     """
 

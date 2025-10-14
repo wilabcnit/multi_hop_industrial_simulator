@@ -5,10 +5,11 @@ def compute_distance_m(tx, rx):
     """
 
     Args:
-      tx: 
-      rx: 
+      tx: Transmitter (UE or BS)
+      rx: Receiver (UE or BS) != Transmitter
 
     Returns:
+        The 3D distance between tx and rx in meters
 
     """
     return np.sqrt((tx.x-rx.x)**2 + (tx.y-rx.y)**2 + (tx.z-rx.z)**2)

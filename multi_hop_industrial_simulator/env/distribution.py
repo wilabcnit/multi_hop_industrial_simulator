@@ -58,7 +58,7 @@ class Distribution:
         return self.number_of_machines
 
     def distribute_ues(self, ue_array: ndarray, machine_array: ndarray, bs: BS, simulator_tick_duration: float,
-                       factory_length: float = None, factory_width: float = None):
+                       factory_length: float = None, factory_width: float = None, factory_height: float = None):
         """
 
         Args:
@@ -68,6 +68,7 @@ class Distribution:
           simulator_tick_duration: float: duration of simulation ticks
           factory_length: int: length of the factory in meters (Default value = None)
           factory_width: int: width of the factory in meters (Default value = None)
+          factory_height: int: width of the factory in meters (Default value = None)
 
         Distribute the UEs according to their distribution type
 

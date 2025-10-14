@@ -10,35 +10,39 @@ TTL = inputs.get('rl').get('router').get('TTL')
 
 ack_bs_pr = 0.8
 
-##########################
 
 ######## Utility functions of routing ########
 
-# Function to compute the difference between two arrays
 def array_difference(arr1, arr2):
     """
+        Compute the difference between two arrays, returning the elements
+        that are present in arr1 but not in arr2.
 
-    Args:
-      arr1: 
-      arr2: 
+        Args:
+            arr1 (array-like): First array or list.
+            arr2 (array-like): Second array or list.
 
-    Returns:
-
+        Returns:
+            np.ndarray: Sorted array of elements that are in arr1 but not in arr2.
     """
     return np.setdiff1d(arr1, arr2)
 
 # Routing Function
 def get_max_index(neighbor, ack, prx, bs_seen):  # return the next_hop indices
     """
+    Determine the next-hop index for routing based on neighbor connectivity,
+    received ACKs, received power, and BS visibility.
 
     Args:
-      neighbor: 
-      ack: 
-      prx: 
-      bs_seen: 
+        neighbor (np.ndarray): Binary array (1 if neighbor exists, else 0).
+        ack (np.ndarray): ACK reception indicators (e.g., 1 if ACK received).
+        prx (np.ndarray): Received power values for each neighbor.
+        bs_seen (np.ndarray): Binary flags (1 if neighbor sees BS, else 0).
 
     Returns:
-
+        int or None: Index of the selected next hop.
+                     -1 indicates that the BS itself is a direct neighbor.
+                     None indicates no valid next hop found.
     """
     max_prx_indices = []
     max_index = None
@@ -57,9 +61,7 @@ def get_max_index(neighbor, ack, prx, bs_seen):  # return the next_hop indices
                 max_indeces = np.where(ack == max_val)[0]
                 max_index = max_indeces[0]
                 if len(max_indeces) > 1:
-                    # if np.random.rand() > 0.2:
                     for i in max_indeces:
-                        # if np.random.rand() > 0.2:
                         if prx[i] > prx[max_index]:
                             max_index = i
                             max_prx_indices = [i]
@@ -79,9 +81,7 @@ def get_max_index(neighbor, ack, prx, bs_seen):  # return the next_hop indices
                 max_indeces = np.where(ack == max_val)[0]
                 max_index = max_indeces[0]
                 if len(max_indeces) > 1:
-                    # if np.random.rand() > 0.2:
                     for i in max_indeces:
-                        # if np.random.rand() > 0.2:
                         if prx[i] > prx[max_index]:
                             max_index = i
                             max_prx_indices = [i]
@@ -97,9 +97,7 @@ def get_max_index(neighbor, ack, prx, bs_seen):  # return the next_hop indices
             max_indeces = np.where(neighbor == 1)[0]
             max_index = max_indeces[0]
             if len(max_indeces) > 1:
-                # if np.random.rand() > 0.2:
                 for i in max_indeces:
-                    # if np.random.rand() > 0.2:
                     if prx[i] > prx[max_index]:
                         max_index = i
                         max_prx_indices = [i]
@@ -112,19 +110,20 @@ def get_max_index(neighbor, ack, prx, bs_seen):  # return the next_hop indices
 
     return max_index
 
-# Function to select the input for the DRL agent
+
 def select_input_DRL(input_ack, input_prx, input_nodes_number, input_DRL_type_state, input_actions_list):
     """
+    Select input features for the DRL agent based on neighbor ACKs and received power.
 
     Args:
-      input_ack: 
-      input_prx: 
-      input_nodes_number: 
-      input_DRL_type_state: 
-      input_actions_list: 
+        input_ack (list or np.array): ACK count per neighbor (last element is BS).
+        input_prx (list or np.array): Received power per neighbor.
+        input_nodes_number (int): Number of nodes including BS.
+        input_DRL_type_state (int): 1 or 2; defines the type of DRL state.
+        input_actions_list (list): Actions taken per neighbor for normalization.
 
     Returns:
-
+        np.array: Array of DRL input features.
     """
 
     # Check the state type
@@ -204,42 +203,14 @@ def select_input_DRL(input_ack, input_prx, input_nodes_number, input_DRL_type_st
 
         return return_list
 
-# Worker function to handle broadcast trasmsissions
-def broadcast_handling(obs_array, broadcast_response):
-    """
 
-    Args:
-      obs_array: 
-      broadcast_response: 
-
-    Returns:
-
-    """
-    old_state = obs_array[0]
-
-    for i in range(len(broadcast_response[0])):
-
-        if broadcast_response[0][i] == 1:
-            obs_array[0][i] = 1
-            obs_array[1][i] += 1
-            obs_array[2][i] = broadcast_response[1][i]
-            obs_array[3][i] = 0
-
-        elif not broadcast_response[0][i] and old_state[i] == 1:
-            obs_array[3][i] += 1
-
-        if obs_array[3][i] >= TTL:
-            obs_array = ttl_reset(obs_array, i)
-
-    return obs_array
-
-# Worker function to reset the TTL of a specific UE
 def ttl_reset(obs_array, address_index):  # mi serve
     """
+    Reset the TTL of a specific UE.
 
     Args:
-      obs_array: 
-      address_index: 
+      obs_array: observation array.
+      address_index: index of the UE to reset
 
     Returns:
 
@@ -253,17 +224,17 @@ def ttl_reset(obs_array, address_index):  # mi serve
     return obs_array
 
 
-# Worker function to compute the normalized linear interpolation
 def compute_normalized_linear_interpolation(x, x_min, x_max):
     """
+    Compute a normalized value of x using linear interpolation between x_min and x_max.
 
     Args:
-      x: 
-      x_min: 
-      x_max: 
+        x (float): Value to normalize.
+        x_min (float): Minimum value of the range.
+        x_max (float): Maximum value of the range.
 
     Returns:
-
+        float: Normalized value between 0 and 1, rounded to 2 decimal places.
     """
 
     normalized_value = (x - x_min) / (x_max - x_min)

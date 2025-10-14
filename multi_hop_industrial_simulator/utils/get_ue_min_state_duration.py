@@ -1,13 +1,15 @@
 from numpy import ndarray
 
-# Function to get the minimum state duration (in ticks) among all UEs
+
 def get_ue_min_state_duration(ue_array: ndarray):
     """
+    Compute the minimum state duration in ticks among all UEs
 
     Args:
-      ue_array: ndarray: 
+      ue_array: ndarray: array of UEs
 
     Returns:
+        minimum state duration in ticks
 
     """
 

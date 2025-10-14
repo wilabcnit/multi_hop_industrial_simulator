@@ -13,7 +13,7 @@ from datetime import datetime
 from multi_hop_industrial_simulator.network.bs import BS
 from multi_hop_industrial_simulator.network.ue import Ue
 
-from multi_hop_industrial_simulator.utils.plot_data import plot_factory, plot_snr, plot_scenario_2d, write_data
+from multi_hop_industrial_simulator.utils.plot_data import plot_factory, plot_scenario_2d, write_data
 
 from multi_hop_industrial_simulator.utils.check_success import check_collision
 from multi_hop_industrial_simulator.utils.check_success import check_collision_bs

@@ -6,28 +6,33 @@ from multi_hop_industrial_simulator.network.ue import Ue
 from multi_hop_industrial_simulator.network.bs import BS
 from multi_hop_industrial_simulator.channel_models import THz_channel
 
-# Function to compute the maximum propagation delay (in seconds) given the maximum transmission range
+
 def compute_max_prop_delay_tx_range(ue: Ue, bs: BS, input_thz_channel: THz_channel,
                                     bandwidth_hz: float, carrier_frequency_ghz: float,
                                     snr_threshold_db: float, use_huawei_measurements: bool
                                     , enable_print: bool, antenna_gain_model: str = None):
     """
+        Compute the maximum propagation delay (in seconds) given the maximum transmission range.
 
-    Args:
-      ue: Ue: 
-      bs: BS: 
-      input_thz_channel: THz_channel: 
-      bandwidth_hz: float: 
-      carrier_frequency_ghz: float: 
-      snr_threshold_db: float: 
-      use_huawei_measurements: bool: 
-      enable_print: bool: 
-      antenna_gain_model: str:  (Default value = None)
+        The function determines the farthest distance at which the SNR at the receiver side
+        is still above the required threshold. It then converts that distance into a
+        propagation delay assuming line-of-sight propagation at the speed of light.
 
-    Returns:
+        Args:
+            ue (Ue): The user equipment object.
+            bs (BS): The base station object.
+            input_thz_channel (THz_channel): THz channel model instance.
+            bandwidth_hz (float): System bandwidth in Hz.
+            carrier_frequency_ghz (float): Carrier frequency in GHz.
+            snr_threshold_db (float): Minimum acceptable SNR in dB.
+            use_huawei_measurements (bool): Whether to use Huawei measurement-based model.
+            enable_print (bool): If True, print intermediate results.
+            antenna_gain_model (str, optional): Antenna gain model to use. Defaults to None.
 
+        Returns:
+            float: Maximum propagation delay in seconds.
     """
-    # inserire metodi thz_channel e eliminare transceiver_params
+
     tx_power_dbm = ue.transceiver_params.get('Transmit power')
     tx_power_dbw = tx_power_dbm - 30
     tx_antenna_efficiency = ue.transceiver_params.get('Antenna efficiency')
@@ -54,7 +59,6 @@ def compute_max_prop_delay_tx_range(ue: Ue, bs: BS, input_thz_channel: THz_chann
     max_path_loss = (tx_power_dbw + tx_antenna_efficiency_db + rx_antenna_efficiency_db + tx_antenna_gain_db +
                      rx_antenna_gain_db - noise_power_dbw - snr_threshold_db)
 
-    # higher distance PL
 
     if use_huawei_measurements:
         tx_range = 10 ** ((max_path_loss - 30.7 - 20.6 * log10(carrier_frequency_ghz)) / 22.8)

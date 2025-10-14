@@ -7,21 +7,22 @@ import numpy as np
 from multi_hop_industrial_simulator.network.bs import BS
 from numpy import ndarray
 
-# Function to compute the outputs of the simulator
 def compute_simulator_outputs(ue_array: ndarray, bs: BS, simulation_time_s: float, inputs_dict: dict, output_dict: dict,
                               output_n_ue: int, output_n_sim: int):
     """
+    Compute simulation outputs: performance metrics
 
     Args:
-      ue_array: ndarray: 
-      bs: BS: 
-      simulation_time_s: float: 
-      inputs_dict: dict: 
-      output_dict: dict: 
-      output_n_ue: int: 
-      output_n_sim: int: 
+      ue_array: ndarray: array of UEs
+      bs: BS: base station object
+      simulation_time_s: float: duration of simulation in seconds
+      inputs_dict: dict: dictionary of inputs performance metrics
+      output_dict: dict: dictionary of outputs performance metrics
+      output_n_ue: int: number of UEs
+      output_n_sim: int: number of simulations done
 
     Returns:
+        None
 
     """
     # Metrics

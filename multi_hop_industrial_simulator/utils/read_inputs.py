@@ -4,14 +4,14 @@
 
 import yaml
 
-# Function to read a yaml file and return a dictionary
 def read_inputs(filepath):
     """Read yaml file and return a Python dictionary with all parameters.
 
     Args:
-      filepath: 
+      filepath: path to yaml file
 
     Returns:
+        dictionary of input file parameters
 
     """
     with open(filepath) as file:

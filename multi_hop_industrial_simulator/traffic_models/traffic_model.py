@@ -13,54 +13,62 @@ class TrafficModel:
         self.period_exponential = 0
         self.full_queue = input_full_queue
 
-    # Set the time periodicity in ticks
     def set_time_periodicity(self, time_periodicity_ticks: int):
         """
+        Set the time periodicity (in simulation ticks) for packet generation or events.
 
         Args:
-          time_periodicity_ticks: int: 
+            time_periodicity_ticks (int): The number of ticks representing the time periodicity.
 
         Returns:
-
+            None
         """
         self.time_periodicity_ticks = time_periodicity_ticks
 
-    # Get the time periodicity in ticks
     def get_time_periodicity(self):
-        """ """
-        return self.time_periodicity_ticks
-
-    # Set the time of generation of the next packet in ticks
-    def set_t_generation_optimization(self, input_generation: float):
         """
-
-        Args:
-          input_generation: float: 
+        Get the current time periodicity (in ticks).
 
         Returns:
+            int: The time periodicity in ticks.
+        """
+        return self.time_periodicity_ticks
 
+    def set_t_generation_optimization(self, input_generation: float):
+        """
+        Set the optimized generation time (in ticks) for the next packet.
+
+        Args:
+            input_generation (float): The next packet generation time in ticks.
+
+        Returns:
+            None
         """
         self.t_generation_optimization = input_generation
 
-    # Set the next time of generation of the packet in ticks (according to an exponential distribution)
     def set_exp_distribution(self, scale_value: float, tick_simulator: float):
         """
+        Set the next packet generation time using an exponential distribution.
 
         Args:
-          scale_value: float: 
-          tick_simulator: float: 
+            scale_value (float): The mean value (scale) of the exponential distribution.
+            tick_simulator (float): The simulator tick duration used for scaling the generated time.
 
         Returns:
-
+            None
         """
         self.scale_value = scale_value
         self.tick = tick_simulator
         sample_exponential = np.random.exponential(scale_value, None)
         self.t_generation_optimization += math.ceil(sample_exponential / self.tick)
 
-    # Get the next time of generation of the packet in ticks (according to an exponential distribution)
     def get_exp_distribution(self):
-        """ """
+        """
+        Get the next packet generation time based on an exponential distribution.
+
+        Returns:
+            int: The generated packet time interval (in ticks) from the exponential distribution.
+        """
         if self.scale_value == 0:
             self.t_generation_optimization = 0
         else:
@@ -68,7 +76,11 @@ class TrafficModel:
             self.t_generation_optimization = math.ceil(sample_exponential / self.tick)
         return self.t_generation_optimization
 
-    # Get the full queue mode
     def get_full_queue_mode(self):
-        """ """
+        """
+        Get the status of the full queue mode (whether the UE has always at least one packet in the queue).
+
+        Returns:
+            bool: True if the full queue mode is active, False otherwise.
+        """
         return self.full_queue

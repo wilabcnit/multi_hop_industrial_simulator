@@ -1,16 +1,17 @@
 import os
 import pandas as pd
 
-# Function to read an input Excel file and return a DataFrame
+
 def read_input_file(file_name: str, sheet_name: str, reset_index: bool = None):
     """
 
     Args:
-      file_name: str: 
-      sheet_name: str: 
+      file_name: str: name of the input file to be read
+      sheet_name: str: name of the sheet to be read
       reset_index: bool:  (Default value = None)
 
     Returns:
+        Dataframe of the input file
 
     """
 

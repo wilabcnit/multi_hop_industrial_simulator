@@ -21,9 +21,10 @@ class BsBuffer:
         """Add a new packet to the buffer, updating the buffer size, if the buffer is not full
 
         Args:
-          packet: Packet: 
+          packet: Packet to be added to the buffer.
 
         Returns:
+            bool: True if the packet was added, False otherwise
 
         """
         if self.buffer_size + packet.packet_size < self.max_buffer_size:

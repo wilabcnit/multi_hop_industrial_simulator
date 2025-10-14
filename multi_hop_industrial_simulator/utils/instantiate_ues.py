@@ -9,21 +9,21 @@ from multi_hop_industrial_simulator.network.ue import Ue
 import sys
 import math
 
-# Function to create the UEs with the correct type of traffic
 def instantiate_ues(input_params_dict: dict, tot_number_of_ues: int, starting_state: str, t_state_tick: int,
                     simulator_tick_duration: float, bit_rate_gbits: float, max_n_retx_per_packet: int):
     """
 
     Args:
-      input_params_dict: dict: 
-      tot_number_of_ues: int: 
-      starting_state: str: 
-      t_state_tick: int: 
-      simulator_tick_duration: float: 
-      bit_rate_gbits: float: 
-      max_n_retx_per_packet: int: 
+      input_params_dict: dict: dictionary of input parameters
+      tot_number_of_ues: int: total number of UEs to instantiate
+      starting_state: str: starting state of the UE
+      t_state_tick: int: duration in ticks of the initial state of the UE
+      simulator_tick_duration: float: duration of the simulator tick
+      bit_rate_gbits: float: bit rate in Gbit/s
+      max_n_retx_per_packet: int: maximum number of retransmission per packet
 
     Returns:
+        UE array
 
     """
 

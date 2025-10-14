@@ -18,116 +18,64 @@ class UeBuffer:
         self.max_buffer_size = max_buffer_size  # bytes
 
     def add_packet(self, packet: Packet):
-        """Add a new packet to the buffer, updating the buffer size, if the buffer is not full
+        """
+        Add a new packet to the buffer, updating the buffer size, if the buffer is not full.
 
         Args:
-          packet: Packet: 
+            packet (Packet): The packet object to add to the buffer.
 
         Returns:
-
+            bool: True if the packet was successfully added, False if the buffer is full.
         """
         if self.buffer_size + packet.packet_size < self.max_buffer_size:
             self.buffer_packet_list.append(packet)
             self.buffer_packet_id_set.add(packet.get_id())
             self.buffer_size += packet.packet_size
-            # print("Packet size added: ", packet.packet_size)
             self.n_packets += 1
             return True
         else:
             return False
-    # Remove the DATA from the UE buffer, finding the packet to be removed by ID
+
     def remove_data(self, packet_id: int = None):
         """
+        Remove a packet from the buffer by its ID and update buffer statistics.
 
         Args:
-          packet_id: int:  (Default value = None)
+            packet_id (int, optional): The ID of the packet to remove. Defaults to None.
 
         Returns:
-
+            None
         """
         idx_packet = self.find_packet_by_id(packet_id)
-        # Update buffer size and number of total packets
         self.buffer_size -= self.buffer_packet_list[idx_packet].get_size()
         self.n_packets -= 1
         self.buffer_packet_id_set.remove(packet_id)
         del self.buffer_packet_list[idx_packet]
 
-    # remove
-    def schedule_data(self, priority_metric: str = None, packet_id: int = None, tx_size: float = None, time=None):
-        """Schedule tx_size Mb or specific packet_id packet from this buffer. Return 0 if not empty, 1 otherwise.
-
-        Args:
-          priority_metric: str:  (Default value = None)
-          packet_id: int:  (Default value = None)
-          tx_size: float:  (Default value = None)
-          time:  (Default value = None)
-
-        Returns:
-
-        """
-        if time is not None:
-            for p in self.buffer_packet_list:
-                p.update_elapsed_time(time)
-        if self.buffer_size == 0:
-            return 1
-        if priority_metric is not None:
-            self.order_buffer(priority_metric)
-
-        # Transmit packets
-        if packet_id is not None:
-            # Add packet to the pending ones
-            if packet_id in self.buffer_packet_id_set and packet_id not in self.pending_packet_id_set:
-                self.pending_packets_list.append(
-                    self.buffer_packet_list[self.find_packet_by_id(packet_id)]
-                )
-                self.pending_packet_id_set.add(packet_id)
-                self.pending = True
-            else:
-                print(
-                    "Attention ! The packet with id {} "
-                    "is not in the buffer and it cannot be scheduled for transmission".format(packet_id))
-        # Transmit specific amount of data
-        elif tx_size is not None:
-            # Partial packet transmission is missing
-            pkt_index = 0
-            # Loop while there is space to be allocated, and data to be sent.
-            while tx_size > 0 and pkt_index < len(self.buffer_packet_list):
-                pending_packet = self.buffer_packet_list[pkt_index]
-                # Update the pending packet size
-                scheduled_size = pending_packet.schedule_pending(tx_size)
-                if pending_packet.get_id() not in self.pending_packet_id_set:
-                    self.pending_packets_list.append(pending_packet)
-                    self.pending_packet_id_set.add(pending_packet.get_id())
-                tx_size -= scheduled_size
-                self.pending = True
-                pkt_index += 1
-
-        if self.buffer_size:
-            return 0
-        return 1
 
     def order_buffer(self, priority_metric):
         """
+        Order the packets in the buffer according to a given priority metric.
 
         Args:
-          priority_metric: 
+            priority_metric (str): The packet attribute name to sort by.
 
         Returns:
-
+            None
         """
-        # Order packets by priority and qos_latency requirement to choose the one that needs resources
-        self.buffer_packet_list = sorted(self.buffer_packet_list, reverse=False,
-                                         key=operator.attrgetter(priority_metric))
+        self.buffer_packet_list = sorted(
+            self.buffer_packet_list, reverse=False, key=operator.attrgetter(priority_metric)
+        )
 
     def find_packet_by_id(self, packet_id: int):
         """
+        Find the index of a packet in the buffer by its ID.
 
         Args:
-          packet_id: int: 
+            packet_id (int): The ID of the packet to find.
 
         Returns:
-          
-
+            int: Index of the packet in the buffer list if found, otherwise None.
         """
         for idx in range(self.n_packets):
             if self.buffer_packet_list[idx].get_id() == packet_id:
@@ -135,58 +83,88 @@ class UeBuffer:
 
     def get_packet_by_id(self, packet_id: int):
         """
+        Retrieve a packet object from the buffer by its ID.
 
         Args:
-          packet_id: int: 
+            packet_id (int): The ID of the packet to retrieve.
 
         Returns:
-
+            Packet: The packet object with the specified ID.
         """
         return self.buffer_packet_list[self.find_packet_by_id(packet_id)]
 
-    # Return the first packet of the UE buffer
     def get_first_packet(self):
-        """ """
+        """
+        Get the first packet currently stored in the buffer.
+
+        Returns:
+            Packet: The first packet in the buffer.
+        """
         return self.buffer_packet_list[0]
 
-    # Return the last packet of the UE buffer
     def get_last_packet(self):
-        """ """
+        """
+        Get the last packet currently stored in the buffer.
+
+        Returns:
+            Packet: The last packet in the buffer.
+        """
         return self.buffer_packet_list[-1]
 
-    # Return the buffer size
     def get_buffer_size(self):
-        """ """
+        """
+        Get the current total buffer size in Mb (or bytes).
+
+        Returns:
+            float: The total size of all packets in the buffer.
+        """
         return self.buffer_size
 
-    # Return the number of packets in the buffer
     def get_n_packets(self):
-        """ """
+        """
+        Get the number of packets currently stored in the buffer.
+
+        Returns:
+            int: The number of packets in the buffer.
+        """
         return self.n_packets
 
-    # Return the list of packets in the UE buffer
     def get_packet_list(self):
-        """ """
+        """
+        Get the list of all packets currently in the buffer.
+
+        Returns:
+            list[Packet]: List of packet objects.
+        """
         return self.buffer_packet_list
 
-    # Return the ID of the first packet of the UE buffer
     def get_first_packet_id(self):
-        """ """
+        """
+        Get the ID of the first packet currently in the buffer.
+
+        Returns:
+            int: Packet ID of the first packet.
+        """
         return self.buffer_packet_list[0].get_id()
 
-    # Return the ID of the last packet of the UE buffer
     def get_last_packet_id(self):
-        """ """
+        """
+        Get the ID of the last packet currently in the buffer.
+
+        Returns:
+            int: Packet ID of the last packet.
+        """
         return self.buffer_packet_list[-1].get_id()
 
     def remove_old_data(self):
-        """Remove packets from the buffer if they have not been transmitted because of errors in scheduling (due to
-            the learning time needed).
+        """
+        Remove packets from the buffer that were not transmitted (e.g., due to learning or scheduling errors).
 
         Args:
+            None
 
         Returns:
-
+            int: Number of packets removed from the buffer.
         """
         packets_removed = list()
         for p_id in self.buffer_packet_id_set:
@@ -194,7 +172,6 @@ class UeBuffer:
                 if packet.get_id() == p_id:
                     del self.buffer_packet_list[self.find_packet_by_id(packet.get_id())]
                     packets_removed.append(packet.get_id())
-                    # print('Packet {} discarded '.format(packet.get_id()))
                     self.buffer_size -= packet.get_data_to_be_sent()
                     if self.buffer_size < 0:
                         self.buffer_size = 0
@@ -204,9 +181,13 @@ class UeBuffer:
             self.buffer_packet_id_set.remove(pack_id)
         return n_discarded_packets
 
-    # Return the True if there is at least a packet in the UE buffer
     def is_there_any_data(self):
-        """ """
+        """
+        Check whether there is at least one packet stored in the buffer.
+
+        Returns:
+            bool: True if at least one packet is in the buffer, False otherwise.
+        """
         if self.get_n_packets() > 0:
             return True
         else:

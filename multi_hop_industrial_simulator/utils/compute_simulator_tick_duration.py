@@ -3,14 +3,16 @@
 """
 import sys
 
-# Function to compute the duration of the simulation tick in seconds
+
 def compute_simulator_tick_duration(input_params_dict: dict):
     """
+    Compute the duration in seconds of the simulation tick
 
     Args:
-      input_params_dict: dict: 
+      input_params_dict: dict: dictionary of input parameters
 
     Returns:
+        simulation tick duration in seconds
 
     """
     if 'radio' in input_params_dict:

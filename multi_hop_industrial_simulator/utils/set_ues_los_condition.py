@@ -17,7 +17,7 @@ def set_ues_los_condition(ue: Ue, bs: BS, machine_array: ndarray, link : str):
     """Determine if there is a Line-of-Sight (LoS) or Non-Line-of-Sight (NLoS) condition between UEs
     considering obstructions (machines).
     
-    Parameters:
+    Args:
         ue_array : Array of UEs.
         bs : BS
         machine_array : Array of Machines.
@@ -25,14 +25,6 @@ def set_ues_los_condition(ue: Ue, bs: BS, machine_array: ndarray, link : str):
     Returns:
         None: The function sets the 'los_nlos_info' field of each UE object with the LoS/NLoS
               information w.r.t. the BS and other UEs.
-
-    Args:
-      ue: Ue: 
-      bs: BS: 
-      machine_array: ndarray: 
-      link : str: 
-
-    Returns:
 
     
     """
@@ -69,10 +61,9 @@ def set_ues_los_condition(ue: Ue, bs: BS, machine_array: ndarray, link : str):
                         h_1 = ue.get_coordinates()[2]
                         h_2 = bs.get_coordinates()[2]
                         if max(h_1, h_2) >= machine.get_machine_size():
-                                    # Either Tx or Rx is higher than the obstacle ==> High 3GPP model
+                            # Either Tx or Rx is higher than the obstacle ==> High 3GPP model
                             is_low_channel_condition_bool = False
-                        # return is_in_los
-                            # break
+
                     # Search for the next point
             if is_in_los is False:
                 y = y_target+1
@@ -96,7 +87,6 @@ def set_ues_los_condition(ue: Ue, bs: BS, machine_array: ndarray, link : str):
                         if max(h_1, h_2) >= machine.get_machine_size():
                             # Either Tx or Rx is higher than the obstacle ==> High 3GPP model
                             is_low_channel_condition_bool = False
-                        # return is_in_los
 
             if is_in_los is False:
                 x = x_target+1
@@ -118,7 +108,7 @@ def set_ues_los_condition(ue: Ue, bs: BS, machine_array: ndarray, link : str):
                     if max(h_1, h_2) >= machine.get_machine_size():
                         # Either Tx or Rx is higher than the obstacle ==> High 3GPP model
                         is_low_channel_condition_bool = False
-                    # return is_in_los
+
     else:
         # UE and gNB have all different coordinates
         x = min(x_ue, x_bs)
@@ -139,18 +129,16 @@ def set_ues_los_condition(ue: Ue, bs: BS, machine_array: ndarray, link : str):
                         if max(h_1, h_2) >= machine.get_machine_size():
                             is_low_channel_condition_bool = False
                             # Either Tx or Rx is higher than the obstacle ==> High 3GPP model
-                        # return is_in_los
 
             if is_in_los is False:
                 x = x_target + 1
                 # No need to proceed further
-                # break
+
             else:
                 # Keep searching
                 x += step
 
     if link == 'ue_ue':
-        # ue.set_los_condition_ue_ue(is_in_los)
         ue.set_channel_condition_with_ue(is_low_channel_condition_bool=is_low_channel_condition_bool)
     if link == 'ue_bs' or link == 'bs_ue':
         ue.set_channel_condition_with_bs(is_low_channel_condition_bool=is_low_channel_condition_bool)

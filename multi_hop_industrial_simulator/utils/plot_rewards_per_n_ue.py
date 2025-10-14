@@ -20,19 +20,19 @@ n_simulations = str(inputs.get('simulation').get('n_simulations'))
 number_of_tx_data_per_step = inputs.get('rl').get('agent').get('number_of_tx_data_per_step')
 final_number_of_ues = inputs.get('simulation').get('final_number_of_ues')
 
-# Function to plot the rewards obtained by the agent for a specific UE
 def plot_rewards_per_n_ue(input_ue_id,input_ue_simulations_reward, input_n_ue, input_save_path):
     """
+        Plot the cumulative rewards obtained by the agent for a specific UE.
 
-    Args:
-      input_ue_id: 
-      input_ue_simulations_reward: 
-      input_n_ue: 
-      input_save_path: 
+        Args:
+            input_ue_id (int): UE ID.
+            input_ue_simulations_reward (list): List of episode reward values for the UE.
+            input_n_ue (int): Current number of UEs in the simulation.
+            input_save_path (str): Directory path or prefix to save the figure.
 
-    Returns:
-
-    """
+        Returns:
+            None
+        """
     plt.figure(input_ue_id, figsize=(8, 4))
     plt.plot(input_ue_simulations_reward)
     plt.title(f'Agent in node: {input_ue_id}')
@@ -46,40 +46,3 @@ def plot_rewards_per_n_ue(input_ue_id,input_ue_simulations_reward, input_n_ue, i
 
     plt.close()
 
-# Function to plot the actions taken by the agent for a specific UE (Old RL version)
-def plot_actions_per_n_ue(input_ue_id,input_ue_simulations_action,input_actions_label, input_n_ue, input_save_path):
-    """
-
-    Args:
-      input_ue_id: 
-      input_ue_simulations_action: 
-      input_actions_label: 
-      input_n_ue: 
-      input_save_path: 
-
-    Returns:
-
-    """
-    plt.figure(100 +input_ue_id, figsize=(8, 4))
-
-    plt.plot( input_ue_simulations_action[0], 'r', label=input_actions_label[0])  # Red solid line
-    plt.plot( input_ue_simulations_action[1], 'b', label=input_actions_label[1])  # Blue dashed line
-    plt.plot( input_ue_simulations_action[2], 'g', label=input_actions_label[2])  # Green dotted line
-    plt.plot( input_ue_simulations_action[3], 'y', label=input_actions_label[3])  # Yellow dash-dot line
-    plt.title(f'Agent in node: {input_ue_id}')
-    plt.grid(True)
-    plt.legend(loc='upper left')
-    plt.savefig(input_save_path +"agent_"+ str(input_ue_id) + "_actions_n_ue" + str(input_n_ue) +
-                "b_no_change" + broadcast_ampl_factor_no_change +
-                "b_change" + broadcast_ampl_factor_change +
-                "u_no_ack" + unicast_ampl_factor_no_ack +
-                "u_ack" + unicast_ampl_factor_ack +
-                "en_f" + energy_factor +
-                "ttl" + TTL +
-                "batch" + batch_size +
-                "disc_f" + discount_factor +
-                "n_sim_for_train" + n_simulations_for_training +
-                "n_sim" + n_simulations +
-                 ".png")
-
-    plt.close()

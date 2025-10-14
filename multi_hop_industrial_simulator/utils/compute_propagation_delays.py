@@ -8,16 +8,17 @@ from multi_hop_industrial_simulator.network.bs import BS
 from numpy import ndarray
 from scipy.constants import c
 
-# Function to compute the propagation delays (in seconds and in ticks) between all the UEs and the BS
 def compute_propagation_delays(ue_array: ndarray, bs: BS, input_simulator_tick_duration_s: float):
     """
+    Compute the propagation delays in seconds between all network elements
 
     Args:
-      ue_array: ndarray: 
-      bs: BS: 
-      input_simulator_tick_duration_s: float: 
+      ue_array: ndarray: array of UEs in the environment
+      bs: BS: base station object
+      input_simulator_tick_duration_s: float: duration of simulator tick in seconds
 
     Returns:
+        None
 
     """
     for ue in ue_array:

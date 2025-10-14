@@ -118,9 +118,9 @@ simulation:
     initial_number_of_ues : 6
     step_number_of_ues : 6
     final_number_of_ues : 6
-    initial_seed: 18
-    final_seed: 18
-    seed: 18
+    initial_seed: 1
+    final_seed: 1
+    seed: 1
     enable_print: False  # True to obtain useful prints for debugging purposes
     star_topology: False # True if star topology, False if mesh topology
     mobility_obstacle: False

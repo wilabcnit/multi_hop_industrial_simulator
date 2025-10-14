@@ -1,5 +1,5 @@
 """
-    Utility scripts to create the BS list with the correct type of traffic
+    Utility scripts to create the BS object with the correct type of traffic
 
     @Note: simulator_tick_duration must be in seconds
 """
@@ -13,12 +13,13 @@ def instantiate_bs(input_params_dict: dict, simulator_tick_duration: float, star
     """
 
     Args:
-      input_params_dict: dict: 
-      simulator_tick_duration: float: 
-      starting_state: str: 
-      bit_rate_gbits: float: 
+      input_params_dict: dict: dictionary of input parameters
+      simulator_tick_duration: float: duration of simulation in ticks
+      starting_state: str: starting state of BS
+      bit_rate_gbits: float: bit rate value in Gbit/s
 
     Returns:
+        BS object
 
     """
     bs = None
@@ -35,13 +36,11 @@ def instantiate_bs(input_params_dict: dict, simulator_tick_duration: float, star
                     scale = float(values.get('machine_optimization').get('scale'))  # in s
                     if 0.01 <= scale <= 1:
                         bs.set_exp_distribution(scale_value=scale, tick_simulator=simulator_tick_duration)
-                        # print("NRT for machine optimization, mean: ", scale)
                     else:
                         sys.exit("The mean you chose for NRT for machine optimization is wrong!")
                     payload = values.get('machine_optimization').get('payload')
 
                     if 100 <= payload <= 300:
-                        # print("Payload BS for Optimization: ", payload)
                         bs.set_new_packet_size(payload)
                     else:
                         sys.exit("Check the payload of NRT high and low, something is wrong!")
