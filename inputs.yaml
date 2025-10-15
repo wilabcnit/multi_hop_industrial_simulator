@@ -114,7 +114,7 @@ aloha_protocol:
 # High-Level simulation parameters
 simulation:
     tot_simulation_time_s: 0.0005 # s
-    n_simulations : 1
+    n_simulations : 20
     initial_number_of_ues : 6
     step_number_of_ues : 6
     final_number_of_ues : 6
