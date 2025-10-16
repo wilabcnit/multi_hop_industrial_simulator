@@ -179,10 +179,11 @@ Average number of interferers =  0.40626721855654885
 To run more complex experiments, simply edit inputs.yaml and adjust the parameters of interest.
 
 ## Authors
-Sara Cavallero, Andrea Pumilia, and Giampaolo Cuozzo are with the National Laboratory of Wireless Communications (WiLab), CNIT, Italy.
-Chiara Buratti is with the Department of Electrical, Electronics, and Information Engineering ”Guglielmo Marconi” of the University of Bologna, Italy.
+Sara Cavallero, and Giampaolo Cuozzo are with the National Laboratory of Wireless Communications (WiLab), CNIT, Italy.
+Andrea Pumilia is with Astreo S.r.l., Italy.
+Lorenzo Mario Amorosa and Chiara Buratti are with the Department of Electrical, Electronics, and Information Engineering ”Guglielmo Marconi” of the University of Bologna, Italy.
 ## Related publications
-The main reference for the simulator is the paper: "MAC and Routing Protocols Design in Multi-Hop Terahertz Networks", S. Cavallero, A. Pumilia, G. Cuozzo, C. Buratti....
+The main reference for the simulator is the paper: "MAC and Routing Protocols Design in Multi-Hop Terahertz Networks", S. Cavallero, A. Pumilia, G. Cuozzo, L.M. Amorosa, C. Buratti, submitted to IEEE Open Journal of the Communications Society, 2025.
 ## License
 
 
