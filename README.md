@@ -1,16 +1,18 @@
 # multi_hop_industrial_simulator
-This is a discrete-time network simulator, written in Python, that models a THz wireless network for an Industrial Internet of Things (IIoT) scenario in the context of the TIMES project (www.times6g.eu). 
+This is a discrete-time network simulator, written in Python, that models a THz [^1] wireless network for an Industrial Internet of Things (IIoT) scenario in the context of the TIMES project (www.times6g.eu). 
 It is designed to evaluate the performance of multi-hop communication in a factory-like scenario, with a focus on success probability, average latency, network throughput and jain index. 
+
+[^1]: Although developed for THz communications, the simulator can also be configured for other frequency bands through appropriate parameter tuning.
 
 # Theoretical Background:
 
 To enable multi-hop efficiently, three different routing algorithms have been implemented: 
 
 1. Table-Based (TB) - it is the proposed solution, where route discovery and maintenance are performed through user-plane data exhchanges only. TB is also extended with a Multi-Agent Deep Reinforcement Learning (MADRL) algorithm to autonomously adapt several Medium Access Control (MAC) parameters;
-2. Table-Less (TL) - it is a broadcast-based protocol that forwards all received data without maintaining routing tables;
+2. Table-Less (TL) - it is a broadcast-based protocol that forwards all received data without maintaining routing tables (https://doi.org/10.1145/513800.513825);
 3. Ad hoc On-Demand Distance Vector (AODV) - it is a reactive protocol that relies on control messages for neighbor and route discovery (https://doi.org/10.1145/581291.581300).
 
-All routing algorithms operate on top of an unslotted Aloha MAC protocol, while for the wireless propagation, the simulator can use either an experimentally derived channel model, or  the 3GPP indoor factory channel model from TR 38.901.  
+All routing algorithms operate on top of an unslotted Aloha MAC protocol, while for the wireless propagation, the simulator can use either an experimentally derived channel model, or  the 3GPP indoor factory channel model from TR 38.901 (https://www.3gpp.org/ftp/Specs/archive/38_series/38.901/).  
 
 The simulation environment models an industrial scenario with the following characteristics:
 - Base station (BS): A BS is deployed at the center of the area, serving as the anchor point for communication.
@@ -37,8 +39,8 @@ These assumptions ensure that the network operates under saturated traffic condi
   - Path loss computation;
   - Received power calculation;
   - Absorption effects evaluation.
-- dqn_agent:
-    - TensorFlow/Keras implementations of DQN, Double DQN, and Rainbow DQN;
+- ddqn_agent:
+    - TensorFlow/Keras implementations of Double DQN;
     - Model architectures, replay buffers, action-selection policies, and training routines for reinforcement learning with discrete actions.
 - utils - Utility functions:
   - Interference and collision check at the receiver;
