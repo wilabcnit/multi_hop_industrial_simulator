@@ -1,6 +1,3 @@
-"""
-gNodeB class
-"""
 from multi_hop_industrial_simulator.traffic_models.traffic_model import TrafficModel
 from multi_hop_industrial_simulator.network.packet import Packet
 from multi_hop_industrial_simulator.network.bs_buffer import BsBuffer
@@ -8,8 +5,20 @@ import copy as cp
 import sys
 import numpy as np
 
+"""
+Base Station (BS) class
+
+This class represents a base station in the network simulation.
+
+    It handles:
+    - Initialization of the entity
+    - Management of base station properties (coordinates, frequency, channel, state duration)
+    - Packet handling operations (packet size, adding new packets, receiving data from UEs)
+    - Methods supporting interaction with user equipment (UEs) and simulation execution
+
+"""
+
 class BS(TrafficModel):
-    """ """
 
     def __init__(self, params, traffic_type: str, starting_state: str, input_full_queue: bool):
         self.x = 0.0
@@ -239,7 +248,6 @@ class BS(TrafficModel):
         """
         return self.is_low_channel_condition_with_bs
 
-    # Method for adding a new packet in the BS buffer
     def add_new_packet(self, current_tick: int):
         """Add a new packet in the queue and compute the next generation instant, if the buffer is not full.
             Otherwise, just discard the packet.

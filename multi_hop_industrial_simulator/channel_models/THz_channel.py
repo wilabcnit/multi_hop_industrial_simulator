@@ -55,7 +55,7 @@ class THzChannel:
 
     def get_3gpp_path_loss_db(self, tx, rx, carrier_frequency_ghz: float, tx_rx_distance_m: float,
                               apply_fading: bool, clutter_density: float, input_shadowing_sample_index: int,
-                              los_cond: str, use_huawei_measurements: bool, input_average_clutter_height_m: float):
+                              los_cond: str, use_channel_measurements: bool, input_average_clutter_height_m: float):
         """
 
         Args:
@@ -67,7 +67,7 @@ class THzChannel:
           clutter_density: float: density of obstacles in the reference environment
           input_shadowing_sample_index: int: index of shadowing sample in the array of values
           los_cond: str: Line of Sight or Non LoS condition
-          use_huawei_measurements: bool: True if channel model experimentally derived by Huawei measurements;
+          use_channel_measurements: bool: True if channel model experimentally derived by Huawei measurements;
                                          False if 3GPP TR 38.901 channel model
           input_average_clutter_height_m: float: average height of clutter in meters
 
@@ -79,7 +79,7 @@ class THzChannel:
         xi = self.shadowing_samples_array_db[input_shadowing_sample_index]
 
         # Path loss in LoS
-        if use_huawei_measurements:
+        if use_channel_measurements:
             path_loss_db = 10 * 2.26 * log10(tx_rx_distance_m) + 32.4 + 20 * log10(carrier_frequency_ghz)
         else:
             path_loss_db = 31.84 + 21.50 * log10(tx_rx_distance_m) + 19.00 * log10(carrier_frequency_ghz)
@@ -102,7 +102,7 @@ class THzChannel:
 
         if not is_los_condition:
             # NLoS
-            if use_huawei_measurements:
+            if use_channel_measurements:
                 path_loss_db = 10 * 3.27 * log10(tx_rx_distance_m) + 32.4 + 20 * log10(carrier_frequency_ghz)
             else:
                 if clutter_density < 0.4:
@@ -271,7 +271,7 @@ class THzChannel:
 
     def get_3gpp_snr_db(self, tx, rx, carrier_frequency_ghz: float, tx_rx_distance_m: float,
                         apply_fading: bool, bandwidth_hz: float, clutter_density: float,
-                        input_shadowing_sample_index: int,  use_huawei_measurements: bool,
+                        input_shadowing_sample_index: int,  use_channel_measurements: bool,
                         input_average_clutter_height_m: float, los_cond: str,
                         antenna_gain_model: str = None):
         """
@@ -285,7 +285,7 @@ class THzChannel:
           bandwidth_hz: float: bandwidth of the carrier in Hz
           clutter_density: float: density of obstacles in the reference environment
           input_shadowing_sample_index: int: index of input shadowing sample in the array of values
-          use_huawei_measurements: bool: True if channel model experimentally derived by Huawei measurements;
+          use_channel_measurements: bool: True if channel model experimentally derived by Huawei measurements;
                                          False if 3GPP TR 38.901 channel model
           input_average_clutter_height_m: float: average height of the clutter in meters
           los_cond: str: Line of Sight or Non LoS condition
@@ -300,7 +300,7 @@ class THzChannel:
                                                   tx_rx_distance_m=tx_rx_distance_m,
                                                   apply_fading=apply_fading, clutter_density=clutter_density,
                                                   input_shadowing_sample_index=input_shadowing_sample_index,
-                                                  use_huawei_measurements=use_huawei_measurements,
+                                                  use_channel_measurements=use_channel_measurements,
 
                                                   los_cond= los_cond, 
 
@@ -334,7 +334,7 @@ class THzChannel:
 
     def get_3gpp_prx_db(self, tx, rx, carrier_frequency_ghz: float, tx_rx_distance_m: float,
                         apply_fading: bool, bandwidth_hz: float, clutter_density: float,
-                        input_shadowing_sample_index: int,  use_huawei_measurements: bool,
+                        input_shadowing_sample_index: int,  use_channel_measurements: bool,
                         input_average_clutter_height_m: float, los_cond: str,
                         antenna_gain_model: str = None):
         """
@@ -348,7 +348,7 @@ class THzChannel:
           bandwidth_hz: float: bandwidth of the transmitter in GHz
           clutter_density: float: density of obstacles within the reference environment
           input_shadowing_sample_index: int: index of the shadowing sample in the array of values
-          use_huawei_measurements: bool: True if channel model experimentally derived by Huawei measurements;
+          use_channel_measurements: bool: True if channel model experimentally derived by Huawei measurements;
                                          False if 3GPP TR 38.901 channel model
           input_average_clutter_height_m: float: average clutter height in meters
           los_cond: str: Line of Sight or Non LoS condition
@@ -364,7 +364,7 @@ class THzChannel:
                                                   tx_rx_distance_m=tx_rx_distance_m,
                                                   apply_fading=apply_fading, clutter_density=clutter_density,
                                                   input_shadowing_sample_index=input_shadowing_sample_index,
-                                                  use_huawei_measurements=use_huawei_measurements,
+                                                  use_channel_measurements=use_channel_measurements,
 
                                                   los_cond=los_cond,
 
@@ -396,7 +396,7 @@ class THzChannel:
 
     def get_3gpp_prx_lin(self, tx, rx, carrier_frequency_ghz: float, tx_rx_distance_m: float,
                         apply_fading: bool, bandwidth_hz: float, clutter_density: float,
-                        input_shadowing_sample_index: int,  use_huawei_measurements: bool,
+                        input_shadowing_sample_index: int,  use_channel_measurements: bool,
                         input_average_clutter_height_m: float, los_cond: str,
                         antenna_gain_model: str = None):
         """
@@ -411,7 +411,7 @@ class THzChannel:
           bandwidth_hz: float: bandwidth of the transmitter in GHz
           clutter_density: float: density of obstacles within the reference environment
           input_shadowing_sample_index: int: index of the shadowing sample in the array of values
-          use_huawei_measurements: bool: True if channel model experimentally derived by Huawei measurements;
+          use_channel_measurements: bool: True if channel model experimentally derived by Huawei measurements;
                                          False if 3GPP TR 38.901 channel model
           input_average_clutter_height_m: float: average clutter height in meters
           los_cond: str: Line of Sight or Non LoS condition
@@ -423,7 +423,7 @@ class THzChannel:
         """
         prx_db = self.get_3gpp_prx_db(tx, rx, carrier_frequency_ghz, tx_rx_distance_m,
                         apply_fading, bandwidth_hz, clutter_density,
-                        input_shadowing_sample_index,  use_huawei_measurements,
+                        input_shadowing_sample_index,  use_channel_measurements,
                         input_average_clutter_height_m, los_cond,
                         antenna_gain_model)
         prx_lin = 10 ** (prx_db / 10)

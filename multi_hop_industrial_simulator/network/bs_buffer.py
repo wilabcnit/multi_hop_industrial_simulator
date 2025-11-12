@@ -1,9 +1,14 @@
 
 from multi_hop_industrial_simulator.network.packet import Packet
 
+"""
+Base Station (BsBuffer) Class
+
+This class implements a BS buffer, i.e., a collection of packets.
+"""
 
 class BsBuffer:
-    """This class implements a BS buffer, i.e., a collection of packets."""
+
 
     def __init__(self):
         self.buffer_packet_list = []  # Contains all generated and not yet sent packets

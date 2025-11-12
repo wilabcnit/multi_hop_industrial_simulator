@@ -1,9 +1,21 @@
 
 import numpy as np
 import math
+"""
+   TrafficModel class
+
+    This class defines the traffic generation model used in the simulation.
+
+    It handles:
+    - Configuration of input traffic characteristics
+    - Support for different traffic patterns:
+        - Periodic generation
+        - Exponential distribution
+        - Full queue mode
+"""
 
 class TrafficModel:
-    """ """
+
     def __init__(self, input_full_queue: bool):
         self.time_periodicity_ticks = 0  # Periodicity of periodic UEs in ticks
         self.t_generation = 0  # All UEs start generating the first data at the beginning of the simulation

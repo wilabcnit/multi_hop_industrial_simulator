@@ -3,7 +3,7 @@ import numpy as np
 
 from multi_hop_industrial_simulator.network.ue import Ue
 from multi_hop_industrial_simulator.utils.utils_for_tb_ualoha_with_dqn import compute_normalized_linear_interpolation
-from multi_hop_industrial_simulator.dqn_agent.dqn_agent_rl_mesh import epsilon_greedy_policy
+from multi_hop_industrial_simulator.ddqn_agent.dqn_agent_rl_mesh import epsilon_greedy_policy
 from multi_hop_industrial_simulator.utils.read_inputs import read_inputs
 
 inputs = read_inputs('inputs.yaml')

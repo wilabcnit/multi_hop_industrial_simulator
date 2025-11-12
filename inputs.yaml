@@ -74,7 +74,7 @@ channel:
     fading_param: 1
     apply_fading: False  # Either "True" or "False"
     antenna_gain_model: 'input'  # Either 'input', i.e., value taken from ue&bs structure (below), or 'kumar salvia'
-    use_huawei_measurements: True
+    use_channel_measurements: True
     p_succ_phy: 0.9
 
 ue:
@@ -114,13 +114,13 @@ aloha_protocol:
 # High-Level simulation parameters
 simulation:
     tot_simulation_time_s: 0.0005 # s
-    n_simulations : 20
+    n_simulations : 1
     initial_number_of_ues : 6
     step_number_of_ues : 6
     final_number_of_ues : 6
-    initial_seed: 1
-    final_seed: 1
-    seed: 1
+    initial_seed: 18
+    final_seed: 18
+    seed: 18
     enable_print: False  # True to obtain useful prints for debugging purposes
     star_topology: False # True if star topology, False if mesh topology
     mobility_obstacle: False
@@ -130,12 +130,12 @@ simulation:
     mobility_changes: 3
 
 power_consumed_ue:
-    idle: 0.0001 # 0.0001 #0.1 mW
-    backoff: 0.0005 # 0.0001 # 0.1 mW
+    idle: 0.0001 #0.1 mW
+    backoff: 0.0005 # 0.1 mW
     propagation_data : 0
     propagation_ack : 0
     tx_data: 0.001 # 0.001
-    wait_ack: 0.0005 # 0.0005 #0.5 mW
+    wait_ack: 0.0005 # 0.5 mW
     low_power: 0.05 #0.05
 
 power_consumed_bs:

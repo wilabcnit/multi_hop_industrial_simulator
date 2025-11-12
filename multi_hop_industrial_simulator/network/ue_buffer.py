@@ -2,9 +2,13 @@ import operator
 
 from multi_hop_industrial_simulator.network.packet import Packet
 
+"""
+    User Equipment Buffer (UeBuffer) Class
+    
+    This class implements a user buffer, i.e., a collection of packets."""
 
 class UeBuffer:
-    """This class implements a user buffer, i.e., a collection of packets."""
+
 
     def __init__(self, max_buffer_size: int):
         self.buffer_packet_list = []  # Contains all generated and not yet sent packets

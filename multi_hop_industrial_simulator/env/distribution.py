@@ -9,8 +9,13 @@ from numpy import ndarray
 from multi_hop_industrial_simulator.network.bs import BS
 from multi_hop_industrial_simulator.env.machine import Machine
 
+'''
+Distribution class
+
+Distribute devices in the environment and compute LoS/NLoS condition.
+'''
+
 class Distribution:
-    """Distribute devices on the environment and compute LoS condition."""
 
     def __init__(self, ue_distribution_type: str, machine_distribution_type: str,
                  scenario_df: DataFrame = None,

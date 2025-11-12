@@ -9,7 +9,7 @@ from multi_hop_industrial_simulator.channel_models import THz_channel
 
 def compute_max_prop_delay_tx_range(ue: Ue, bs: BS, input_thz_channel: THz_channel,
                                     bandwidth_hz: float, carrier_frequency_ghz: float,
-                                    snr_threshold_db: float, use_huawei_measurements: bool
+                                    snr_threshold_db: float, use_channel_measurements: bool
                                     , enable_print: bool, antenna_gain_model: str = None):
     """
         Compute the maximum propagation delay (in seconds) given the maximum transmission range.
@@ -25,7 +25,7 @@ def compute_max_prop_delay_tx_range(ue: Ue, bs: BS, input_thz_channel: THz_chann
             bandwidth_hz (float): System bandwidth in Hz.
             carrier_frequency_ghz (float): Carrier frequency in GHz.
             snr_threshold_db (float): Minimum acceptable SNR in dB.
-            use_huawei_measurements (bool): Whether to use Huawei measurement-based model.
+            use_channel_measurements (bool): Whether to use Huawei measurement-based model.
             enable_print (bool): If True, print intermediate results.
             antenna_gain_model (str, optional): Antenna gain model to use. Defaults to None.
 
@@ -60,7 +60,7 @@ def compute_max_prop_delay_tx_range(ue: Ue, bs: BS, input_thz_channel: THz_chann
                      rx_antenna_gain_db - noise_power_dbw - snr_threshold_db)
 
 
-    if use_huawei_measurements:
+    if use_channel_measurements:
         tx_range = 10 ** ((max_path_loss - 30.7 - 20.6 * log10(carrier_frequency_ghz)) / 22.8)
     else:
         tx_range = 10 ** ((max_path_loss - 31.84 - 19.00 * log10(carrier_frequency_ghz)) / 21.50)

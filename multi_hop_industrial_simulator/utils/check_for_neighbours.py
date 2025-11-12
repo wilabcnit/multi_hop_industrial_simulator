@@ -11,7 +11,7 @@ from multi_hop_industrial_simulator.channel_models.THz_channel import THzChannel
 def check_for_neighbours(ue_array: ndarray, machine_array: ndarray, bs: BS, input_snr_threshold_db: float,
                          input_thz_channel: THzChannel, input_carrier_frequency_ghz: float, input_bandwidth_hz: float,
                          input_apply_fading: bool, input_clutter_density: float, input_shadowing_sample_index: int,
-                         use_huawei_measurements: bool, input_average_clutter_height_m: float,
+                         use_channel_measurements: bool, input_average_clutter_height_m: float,
                          antenna_gain_model: str = None):
     """
     Method to check if UEs have neighbours or are connected to the BS ->
@@ -28,7 +28,7 @@ def check_for_neighbours(ue_array: ndarray, machine_array: ndarray, bs: BS, inpu
       input_apply_fading: bool: True if there is fading; False otherwise
       input_clutter_density: float: average clutter density
       input_shadowing_sample_index: int: index of shadowing sample
-      use_huawei_measurements: bool: True if Huawei measurements are used; False otherwise
+      use_channel_measurements: bool: True if Huawei measurements are used; False otherwise
       input_average_clutter_height_m: float: average clutter height (m)
       antenna_gain_model: str:  (Default value = None) type of antenna gain model
 
@@ -58,7 +58,7 @@ def check_for_neighbours(ue_array: ndarray, machine_array: ndarray, bs: BS, inpu
             clutter_density=input_clutter_density,
             input_shadowing_sample_index=input_shadowing_sample_index,
             antenna_gain_model=antenna_gain_model,
-            use_huawei_measurements=use_huawei_measurements,
+            use_channel_measurements=use_channel_measurements,
             input_average_clutter_height_m=input_average_clutter_height_m,
             los_cond=los_cond)
 
@@ -101,7 +101,7 @@ def check_for_neighbours(ue_array: ndarray, machine_array: ndarray, bs: BS, inpu
                             clutter_density=input_clutter_density,
                             input_shadowing_sample_index=input_shadowing_sample_index,
                             antenna_gain_model=antenna_gain_model,
-                            use_huawei_measurements=use_huawei_measurements,
+                            use_channel_measurements=use_channel_measurements,
                             input_average_clutter_height_m=input_average_clutter_height_m,
                             los_cond=los_cond)
 
@@ -145,7 +145,7 @@ def check_for_neighbours(ue_array: ndarray, machine_array: ndarray, bs: BS, inpu
                             clutter_density=input_clutter_density,
                             input_shadowing_sample_index=input_shadowing_sample_index,
                             antenna_gain_model=antenna_gain_model,
-                            use_huawei_measurements=use_huawei_measurements,
+                            use_channel_measurements=use_channel_measurements,
                             input_average_clutter_height_m=input_average_clutter_height_m,
                             los_cond=los_cond)
 
@@ -175,7 +175,7 @@ def check_for_neighbours(ue_array: ndarray, machine_array: ndarray, bs: BS, inpu
                         clutter_density=input_clutter_density,
                         input_shadowing_sample_index=input_shadowing_sample_index,
                         antenna_gain_model=antenna_gain_model,
-                        use_huawei_measurements=use_huawei_measurements,
+                        use_channel_measurements=use_channel_measurements,
                         input_average_clutter_height_m=input_average_clutter_height_m,
                         los_cond=los_cond)
 
@@ -210,7 +210,7 @@ def check_for_neighbours(ue_array: ndarray, machine_array: ndarray, bs: BS, inpu
                                 clutter_density=input_clutter_density,
                                 input_shadowing_sample_index=input_shadowing_sample_index,
                                 antenna_gain_model=antenna_gain_model,
-                                use_huawei_measurements=use_huawei_measurements,
+                                use_channel_measurements=use_channel_measurements,
                                 input_average_clutter_height_m=input_average_clutter_height_m,
                                 los_cond=los_cond)
 
@@ -227,7 +227,7 @@ def check_for_neighbours(ue_array: ndarray, machine_array: ndarray, bs: BS, inpu
                                 clutter_density=input_clutter_density,
                                 input_shadowing_sample_index=input_shadowing_sample_index,
                                 antenna_gain_model=antenna_gain_model,
-                                use_huawei_measurements=use_huawei_measurements,
+                                use_channel_measurements=use_channel_measurements,
                                 input_average_clutter_height_m=input_average_clutter_height_m,
                                 los_cond=los_cond)
 

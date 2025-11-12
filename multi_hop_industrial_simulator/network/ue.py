@@ -7,7 +7,7 @@ from multi_hop_industrial_simulator.traffic_models.traffic_model import TrafficM
 from multi_hop_industrial_simulator.network.ue_buffer import UeBuffer
 from multi_hop_industrial_simulator.network.packet import Packet
 
-##################################RL Implementation##################################
+################################## RL Implementation ##################################
 from multi_hop_industrial_simulator.utils.utils_for_tb_ualoha_with_dqn import ttl_reset, select_input_DRL
 from multi_hop_industrial_simulator.utils.read_inputs import read_inputs
 
@@ -22,7 +22,24 @@ Q_min = inputs.get('rl').get('router').get('max_n_packets_to_be_forwarded_min')
 Q_max = inputs.get('rl').get('router').get('max_n_packets_to_be_forwarded_max')
 W_min = inputs.get('rl').get('router').get('contention_window_int_min')
 W_max = inputs.get('rl').get('router').get('contention_window_int_max')
-##############################End RL Implementation##################################
+############################## End RL Implementation ##################################
+
+
+""""
+
+  User Equipment (UE) class
+
+    This class represents a user equipment (UE) in the network simulation.
+
+    It handles:
+    - Initialization of UE parameters and neighbor table
+    - Management of UE state and state duration
+    - Setting coordinates and transmission parameters (unicast/broadcast mode, transmission address)
+    - Packet operations (add/remove packets, update number of transmissions)
+    - Determination of link conditions (LoS/NLoS)
+    - Reward handling (set and get reward values)
+
+"""
 
 class Ue(TrafficModel):
     """ """

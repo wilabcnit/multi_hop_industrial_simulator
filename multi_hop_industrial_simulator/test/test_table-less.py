@@ -606,7 +606,7 @@ shadowing_coherence_time_ms = inputs.get('channel').get('shadowing_coherence_tim
 carrier_frequency_ghz = inputs.get('radio').get('carrier_frequency_ghz')
 bandwidth_ghz = inputs.get('radio').get('bandwidth_ghz')
 antenna_gain_model = inputs.get('channel').get('antenna_gain_model')
-use_huawei_measurements = inputs.get('channel').get('use_huawei_measurements')
+use_channel_measurements = inputs.get('channel').get('use_channel_measurements')
 shadowing_coherence_time_s = shadowing_coherence_time_ms / 1000
 bandwidth_hz = bandwidth_ghz * 1e9
 power_bo = inputs.get('power_consumed_ue').get('backoff')
@@ -799,7 +799,7 @@ for seed in range(initial_seed, final_seed + 1):
                                                                   carrier_frequency_ghz=carrier_frequency_ghz,
                                                                   snr_threshold_db=sinr_th_db,
                                                                   antenna_gain_model=antenna_gain_model,
-                                                                  use_huawei_measurements=False,
+                                                                  use_channel_measurements=False,
                                                                   enable_print=enable_print)
         max_prop_delay_tick_tx_range = np.ceil(max_prop_delay_tx_range / simulator_tick_duration_s)
 
@@ -830,7 +830,7 @@ for seed in range(initial_seed, final_seed + 1):
                                  input_shadowing_sample_index=0, input_thz_channel=thz_channel,
                                  input_carrier_frequency_ghz=carrier_frequency_ghz, input_bandwidth_hz=bandwidth_hz,
                                  input_apply_fading=apply_fading, input_clutter_density=clutter_density,
-                                 antenna_gain_model=antenna_gain_model, use_huawei_measurements=use_huawei_measurements,
+                                 antenna_gain_model=antenna_gain_model, use_channel_measurements=use_channel_measurements,
                                  input_average_clutter_height_m=average_machine_height_m)
 
             compute_propagation_delays(ue_array=ue_array, bs=bs,
@@ -1631,7 +1631,7 @@ for seed in range(initial_seed, final_seed + 1):
                                             clutter_density=clutter_density,
                                             input_shadowing_sample_index=shadowing_sample_index,
                                             antenna_gain_model=antenna_gain_model,
-                                            use_huawei_measurements=use_huawei_measurements,
+                                            use_channel_measurements=use_channel_measurements,
                                             input_average_clutter_height_m=average_machine_height_m,
                                             los_cond='ue_ue')
 
@@ -1645,7 +1645,7 @@ for seed in range(initial_seed, final_seed + 1):
                                             clutter_density=clutter_density,
                                             input_shadowing_sample_index=shadowing_sample_index,
                                             antenna_gain_model=antenna_gain_model,
-                                            use_huawei_measurements=use_huawei_measurements,
+                                            use_channel_measurements=use_channel_measurements,
                                             input_average_clutter_height_m=average_machine_height_m,
                                             los_cond='ue_ue')
 
@@ -1713,7 +1713,7 @@ for seed in range(initial_seed, final_seed + 1):
                                                             clutter_density=clutter_density,
                                                             input_shadowing_sample_index=shadowing_sample_index,
                                                             antenna_gain_model=antenna_gain_model,
-                                                            use_huawei_measurements=use_huawei_measurements,
+                                                            use_channel_measurements=use_channel_measurements,
                                                             input_average_clutter_height_m=average_machine_height_m,
                                                             los_cond='ue_ue')
                                                         n_interferers += 1
@@ -1745,7 +1745,7 @@ for seed in range(initial_seed, final_seed + 1):
                                                         clutter_density=clutter_density,
                                                         input_shadowing_sample_index=shadowing_sample_index,
                                                         antenna_gain_model=antenna_gain_model,
-                                                        use_huawei_measurements=use_huawei_measurements,
+                                                        use_channel_measurements=use_channel_measurements,
                                                         input_average_clutter_height_m=average_machine_height_m,
                                                         los_cond='bs_ue')
 
@@ -1787,7 +1787,7 @@ for seed in range(initial_seed, final_seed + 1):
                                                                     clutter_density=clutter_density,
                                                                     input_shadowing_sample_index=shadowing_sample_index,
                                                                     antenna_gain_model=antenna_gain_model,
-                                                                    use_huawei_measurements=use_huawei_measurements,
+                                                                    use_channel_measurements=use_channel_measurements,
                                                                     input_average_clutter_height_m=average_machine_height_m,
                                                                     los_cond='ue_ue')
                                                             elif t >= copy_of_list[i][2]:
@@ -1823,7 +1823,7 @@ for seed in range(initial_seed, final_seed + 1):
                                                                 clutter_density=clutter_density,
                                                                 input_shadowing_sample_index=shadowing_sample_index,
                                                                 antenna_gain_model=antenna_gain_model,
-                                                                use_huawei_measurements=use_huawei_measurements,
+                                                                use_channel_measurements=use_channel_measurements,
                                                                 input_average_clutter_height_m=average_machine_height_m,
                                                                 los_cond='bs_ue')
                                                         elif t >= copy_of_list[i][2]:
@@ -2317,7 +2317,7 @@ for seed in range(initial_seed, final_seed + 1):
                                             clutter_density=clutter_density,
                                             input_shadowing_sample_index=shadowing_sample_index,
                                             antenna_gain_model=antenna_gain_model,
-                                            use_huawei_measurements=use_huawei_measurements,
+                                            use_channel_measurements=use_channel_measurements,
                                             input_average_clutter_height_m=average_machine_height_m,
                                             los_cond=los_cond)
 
@@ -2331,7 +2331,7 @@ for seed in range(initial_seed, final_seed + 1):
                                             clutter_density=clutter_density,
                                             input_shadowing_sample_index=shadowing_sample_index,
                                             antenna_gain_model=antenna_gain_model,
-                                            use_huawei_measurements=use_huawei_measurements,
+                                            use_channel_measurements=use_channel_measurements,
                                             input_average_clutter_height_m=average_machine_height_m,
                                             los_cond=los_cond)
 
@@ -2396,7 +2396,7 @@ for seed in range(initial_seed, final_seed + 1):
                                                             clutter_density=clutter_density,
                                                             input_shadowing_sample_index=shadowing_sample_index,
                                                             antenna_gain_model=antenna_gain_model,
-                                                            use_huawei_measurements=use_huawei_measurements,
+                                                            use_channel_measurements=use_channel_measurements,
                                                             input_average_clutter_height_m=average_machine_height_m,
                                                             los_cond='ue_ue')
                                             for i in range(len(ue.ues_colliding_at_ue)):
@@ -2427,7 +2427,7 @@ for seed in range(initial_seed, final_seed + 1):
                                                             clutter_density=clutter_density,
                                                             input_shadowing_sample_index=shadowing_sample_index,
                                                             antenna_gain_model=antenna_gain_model,
-                                                            use_huawei_measurements=use_huawei_measurements,
+                                                            use_channel_measurements=use_channel_measurements,
                                                             input_average_clutter_height_m=average_machine_height_m,
                                                             los_cond='bs_ue')
 
@@ -2468,7 +2468,7 @@ for seed in range(initial_seed, final_seed + 1):
                                                                     clutter_density=clutter_density,
                                                                     input_shadowing_sample_index=shadowing_sample_index,
                                                                     antenna_gain_model=antenna_gain_model,
-                                                                    use_huawei_measurements=use_huawei_measurements,
+                                                                    use_channel_measurements=use_channel_measurements,
                                                                     input_average_clutter_height_m=average_machine_height_m,
                                                                     los_cond='ue_ue')
                                                             elif t >= copy_of_list[i][2]:
@@ -2503,7 +2503,7 @@ for seed in range(initial_seed, final_seed + 1):
                                                             clutter_density=clutter_density,
                                                             input_shadowing_sample_index=shadowing_sample_index,
                                                             antenna_gain_model=antenna_gain_model,
-                                                            use_huawei_measurements=use_huawei_measurements,
+                                                            use_channel_measurements=use_channel_measurements,
                                                             input_average_clutter_height_m=average_machine_height_m,
                                                             los_cond='bs_ue')
                                                     elif 'BS' == copy_of_list[i][0] and \
@@ -2682,7 +2682,7 @@ for seed in range(initial_seed, final_seed + 1):
                                             clutter_density=clutter_density,
                                             input_shadowing_sample_index=shadowing_sample_index,
                                             antenna_gain_model=antenna_gain_model,
-                                            use_huawei_measurements=use_huawei_measurements,
+                                            use_channel_measurements=use_channel_measurements,
                                             input_average_clutter_height_m=average_machine_height_m,
                                             los_cond='ue_ue')
 
@@ -2696,7 +2696,7 @@ for seed in range(initial_seed, final_seed + 1):
                                             clutter_density=clutter_density,
                                             input_shadowing_sample_index=shadowing_sample_index,
                                             antenna_gain_model=antenna_gain_model,
-                                            use_huawei_measurements=use_huawei_measurements,
+                                            use_channel_measurements=use_channel_measurements,
                                             input_average_clutter_height_m=average_machine_height_m,
                                             los_cond='ue_ue')
 
@@ -2762,7 +2762,7 @@ for seed in range(initial_seed, final_seed + 1):
                                                             clutter_density=clutter_density,
                                                             input_shadowing_sample_index=shadowing_sample_index,
                                                             antenna_gain_model=antenna_gain_model,
-                                                            use_huawei_measurements=use_huawei_measurements,
+                                                            use_channel_measurements=use_channel_measurements,
                                                             input_average_clutter_height_m=average_machine_height_m,
                                                             los_cond='ue_ue')
 
@@ -2792,7 +2792,7 @@ for seed in range(initial_seed, final_seed + 1):
                                                         clutter_density=clutter_density,
                                                         input_shadowing_sample_index=shadowing_sample_index,
                                                         antenna_gain_model=antenna_gain_model,
-                                                        use_huawei_measurements=use_huawei_measurements,
+                                                        use_channel_measurements=use_channel_measurements,
                                                         input_average_clutter_height_m=average_machine_height_m,
                                                         los_cond='bs_ue')
 
@@ -2833,7 +2833,7 @@ for seed in range(initial_seed, final_seed + 1):
                                                                     clutter_density=clutter_density,
                                                                     input_shadowing_sample_index=shadowing_sample_index,
                                                                     antenna_gain_model=antenna_gain_model,
-                                                                    use_huawei_measurements=use_huawei_measurements,
+                                                                    use_channel_measurements=use_channel_measurements,
                                                                     input_average_clutter_height_m=average_machine_height_m,
                                                                     los_cond='ue_ue')
                                                             elif t >= copy_of_list[i][2]: #new
@@ -2868,7 +2868,7 @@ for seed in range(initial_seed, final_seed + 1):
                                                                 clutter_density=clutter_density,
                                                                 input_shadowing_sample_index=shadowing_sample_index,
                                                                 antenna_gain_model=antenna_gain_model,
-                                                                use_huawei_measurements=use_huawei_measurements,
+                                                                use_channel_measurements=use_channel_measurements,
                                                                 input_average_clutter_height_m=average_machine_height_m,
                                                                 los_cond='bs_ue')
                                                         elif t >= copy_of_list[i][2]:
@@ -3321,7 +3321,7 @@ for seed in range(initial_seed, final_seed + 1):
                                     clutter_density=clutter_density,
                                     input_shadowing_sample_index=shadowing_sample_index,
                                     antenna_gain_model=antenna_gain_model,
-                                    use_huawei_measurements=use_huawei_measurements,
+                                    use_channel_measurements=use_channel_measurements,
                                     input_average_clutter_height_m=average_machine_height_m,
                                     los_cond='bs_ue')
 
@@ -3335,7 +3335,7 @@ for seed in range(initial_seed, final_seed + 1):
                                     clutter_density=clutter_density,
                                     input_shadowing_sample_index=shadowing_sample_index,
                                     antenna_gain_model=antenna_gain_model,
-                                    use_huawei_measurements=use_huawei_measurements,
+                                    use_channel_measurements=use_channel_measurements,
                                     input_average_clutter_height_m=average_machine_height_m,
                                     los_cond='bs_ue')
 
@@ -3406,7 +3406,7 @@ for seed in range(initial_seed, final_seed + 1):
                                                     clutter_density=clutter_density,
                                                     input_shadowing_sample_index=shadowing_sample_index,
                                                     antenna_gain_model=antenna_gain_model,
-                                                    use_huawei_measurements=use_huawei_measurements,
+                                                    use_channel_measurements=use_channel_measurements,
                                                     input_average_clutter_height_m=average_machine_height_m,
                                                     los_cond='bs_ue')
 
@@ -3445,7 +3445,7 @@ for seed in range(initial_seed, final_seed + 1):
                                                             clutter_density=clutter_density,
                                                             input_shadowing_sample_index=shadowing_sample_index,
                                                             antenna_gain_model=antenna_gain_model,
-                                                            use_huawei_measurements=use_huawei_measurements,
+                                                            use_channel_measurements=use_channel_measurements,
                                                             input_average_clutter_height_m=average_machine_height_m,
                                                             los_cond='bs_ue')
                                                     else:
@@ -3681,7 +3681,7 @@ for seed in range(initial_seed, final_seed + 1):
                                     clutter_density=clutter_density,
                                     input_shadowing_sample_index=shadowing_sample_index,
                                     antenna_gain_model=antenna_gain_model,
-                                    use_huawei_measurements=use_huawei_measurements,
+                                    use_channel_measurements=use_channel_measurements,
                                     input_average_clutter_height_m=average_machine_height_m,
                                     los_cond='bs_ue')
 
@@ -3696,7 +3696,7 @@ for seed in range(initial_seed, final_seed + 1):
                                     clutter_density=clutter_density,
                                     input_shadowing_sample_index=shadowing_sample_index,
                                     antenna_gain_model=antenna_gain_model,
-                                    use_huawei_measurements=use_huawei_measurements,
+                                    use_channel_measurements=use_channel_measurements,
                                     input_average_clutter_height_m=average_machine_height_m,
                                     los_cond='bs_ue')
 

@@ -1,7 +1,7 @@
 
 """
-    This class implements the packet data structure with
-    associated properties.
+    Packet Class
+    This class implements the packet data structure with associated properties.
 """
 
 
