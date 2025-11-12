@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+- family-names: "Cavallero"
+  given-names: "Sara"
+  orcid: "https://orcid.org/0000-0003-4302-62970"
+- family-names: "Pumilia"
+  given-names: "Andrea"
+- family-names: "Cuozzo"
+  given-names: "Giampaolo"
+  orcid: "https://orcid.org/0000-0001-5954-8343"
+- family-names: "Amorosa"
+  given-names: "Lorenzo Mario"
+  orcid: "https://orcid.org/0000-0002-0405-9611"
+- family-names: "Buratti"
+  given-names: "Chiara"
+  orcid: "https://orcid.org/0000-0003-4802-9585"
+title: "multi_hop_industrial_simulator"
+version: 1.0.0
+doi: 
+date-released: 2025-10-?
+url: "https://github.com/SaraCavallero/multi_hop_industrial_simulator"

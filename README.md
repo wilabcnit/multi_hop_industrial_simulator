@@ -1,16 +1,18 @@
 # multi_hop_industrial_simulator
-This is a discrete-time network simulator, written in Python, that models a THz wireless network for an Industrial Internet of Things (IIoT) scenario in the context of the TIMES project (www.times6g.eu). 
-It is designed to evaluate the performance of multi-hop communication in a factory-like scenario, with a focus on success probability, average latency, network throughput and jain index. 
+This is a discrete-time network simulator, written in Python, that models a THz [^1] wireless network for an Industrial Internet of Things (IIoT) scenario in the context of the TIMES project (www.times6g.eu). 
+It is designed to evaluate the performance of multi-hop communication in a factory-like scenario, with a focus on success probability, average latency, network throughput and jain index.
+
+[^1]: Although developed for THz communications, the simulator can also be configured for other frequency bands through appropriate parameter tuning.
 
 # Theoretical Background:
 
 To enable multi-hop efficiently, three different routing algorithms have been implemented: 
 
 1. Table-Based (TB) - it is the proposed solution, where route discovery and maintenance are performed through user-plane data exhchanges only. TB is also extended with a Multi-Agent Deep Reinforcement Learning (MADRL) algorithm to autonomously adapt several Medium Access Control (MAC) parameters;
-2. Table-Less (TL) - it is a broadcast-based protocol that forwards all received data without maintaining routing tables;
+2. Table-Less (TL) - it is a broadcast-based protocol that forwards all received data without maintaining routing tables (https://doi.org/10.1145/513800.513825);
 3. Ad hoc On-Demand Distance Vector (AODV) - it is a reactive protocol that relies on control messages for neighbor and route discovery (https://doi.org/10.1145/581291.581300).
 
-All routing algorithms operate on top of an unslotted Aloha MAC protocol, while for the wireless propagation, the simulator can use either an experimentally derived channel model, or  the 3GPP indoor factory channel model from TR 38.901.  
+All routing algorithms operate on top of an unslotted Aloha MAC protocol, while for the wireless propagation, the simulator can use either an experimentally derived channel model, or  the 3GPP indoor factory channel model from TR 38.901 (https://www.3gpp.org/ftp/Specs/archive/38_series/38.901/).  
 
 The simulation environment models an industrial scenario with the following characteristics:
 - Base station (BS): A BS is deployed at the center of the area, serving as the anchor point for communication.
@@ -18,9 +20,11 @@ The simulation environment models an industrial scenario with the following char
     - UEs are placed over a regular grid layout to ensure that all of them can reach the BS through one or more hops. Note that, if the input parameters (e.g., UE transmit power, UE antenna gain etc.) are changed, it is necessary to modify their coordinates within the environment to ensure that they can reach the BS;
     - UEs can also be randomly and uniformly distributed in the environment, with the requirement that each has at least one neighbor if direct BS connectivity is not possible.
 - Obstacles: Fixed-position obstacles are included, which block some links and create Line-of-Sight (LOS) or Non-Line-of-Sight (NLOS) conditions.
-- Full-buffer traffic model:
-    - Each UE always has data to send.
-    - As soon as a DATA packet is successfully delivered (or discarded after exceeding the maximum number of retransmission attempts), a new packet is immediately generated.  
+
+The traffic model implemented is a full-buffer model where:
+- Each UE always has data to send.
+- As soon as a DATA packet is successfully delivered (or discarded after exceeding the maximum number of retransmission attempts), a new packet is immediately generated.  
+
 These assumptions ensure that the network operates under saturated traffic conditions, highlighting the impact of routing strategies and channel impairments on performance.
 
 # Simulator Structure:
@@ -36,9 +40,9 @@ These assumptions ensure that the network operates under saturated traffic condi
 - channel_models:
   - Path loss computation;
   - Received power calculation;
-  - Absorption effects evaluation.
-- dqn_agent:
-    - TensorFlow/Keras implementations of DQN, Double DQN, and Rainbow DQN;
+  - Absorption effects and isotropic loss evaluations.
+- ddqn_agent:
+    - TensorFlow/Keras implementations of Double DQN;
     - Model architectures, replay buffers, action-selection policies, and training routines for reinforcement learning with discrete actions.
 - utils - Utility functions:
   - Interference and collision check at the receiver;
@@ -56,7 +60,7 @@ Input File Description:
 
 The simulator requires an input file in YAML format, which specifies all the parameters for the simulation. The main sections are described below:
 - Traffic Configuration:
-    - Define the type of traffic generated by the UEs (User Equipments);
+    - Define the type of traffic generated by the UEs;
     - For each traffic type, a percentage of UEs must be specified;
     - In our work, we mainly focus on the full queue traffic type (the fourth option in the file). However, three other traffic types are available, each with different characteristics.
 - Radio Parameters:
@@ -65,14 +69,14 @@ The simulator requires an input file in YAML format, which specifies all the par
 - Channel Parameters:
     - Channel parameters can be customized;
     - Define the channel model:
-        - use_huawei_measurements: True → experimental channel model
-        - use_huawei_measurements: False → 3GPP factory model
+        - use_channel_measurements: True → experimental channel model
+        - use_channel_measurements: False → 3GPP factory model
     - Molecular absorption coefficients are provided in a separate file but are not used by default.
 - UE Configuration:
     - Choose deployment type: "Grid" or "Uniform".
     - For "Grid", positions are read from input_scenario.xlsx. To change placement, modify this file and re-distribute UEs to ensure connectivity.
     - Set UE-related parameters (antenna gain, number of antennas, transmit power and noise figure).
-- Base Station (BS) Configuration:
+- BS Configuration:
     - Define all BS-related parameters (antenna gain, number of antennas, transmit power and noise figure).
 - Scenario Setup:
     - By default, the "grid" scenario is used, with machines placed in fixed, precise positions. It is possible to create a new environment and define a different scenario.
@@ -177,10 +181,17 @@ Average number of interferers =  0.40626721855654885
 To run more complex experiments, simply edit inputs.yaml and adjust the parameters of interest.
 
 ## Authors
-Sara Cavallero, Andrea Pumilia, and Giampaolo Cuozzo are with the National Laboratory of Wireless Communications (WiLab), CNIT, Italy.
-Chiara Buratti is with the Department of Electrical, Electronics, and Information Engineering ”Guglielmo Marconi” of the University of Bologna, Italy.
+- Sara Cavallero: main author and reference person 
+- Andrea Pumilia
+- Giampaolo Cuozzo
+- Lorenzo Mario Amorosa
+- Chiara Buratti
+
+Sara Cavallero, and Giampaolo Cuozzo are with the National Laboratory of Wireless Communications (WiLab), CNIT, Italy.
+Andrea Pumilia is with Astreo S.r.l., Italy.
+Lorenzo Mario Amorosa and Chiara Buratti are with the Department of Electrical, Electronics, and Information Engineering ”Guglielmo Marconi” of the University of Bologna, Italy.
 ## Related publications
-The main reference for the simulator is the paper: "MAC and Routing Protocols Design in Multi-Hop Terahertz Networks", S. Cavallero, A. Pumilia, G. Cuozzo, C. Buratti....
+The main reference for the simulator is the paper: "MAC and Routing Protocols Design in Multi-Hop Terahertz Networks", S. Cavallero, A. Pumilia, G. Cuozzo, L.M. Amorosa, C. Buratti, submitted to IEEE Open Journal of the Communications Society, 2025.
 ## License
 
 
