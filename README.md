@@ -199,6 +199,6 @@ If you use this project in your work, please cite it following the instructions 
 The main reference for the simulator is the paper: "MAC and Routing Protocols Design in Multi-Hop Terahertz Networks", S. Cavallero, A. Pumilia, G. Cuozzo, L.M. Amorosa, C. Buratti, submitted to IEEE Open Journal of the Communications Society, 2025.
 ## License
 This project is licensed under the **GNU General Public License v3.0 (GPLv3)**.  
-See the link (https://opensource.org/license/GPL-3.0) for the full license text.
+See the LICENSE file in the project root for the full license text or visit the link: https://www.gnu.org/licenses/gpl-3.0.html#license-text.
 
 
