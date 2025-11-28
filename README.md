@@ -136,7 +136,7 @@ This project has been developed and tested with **Python 3.9.18** and the follow
 Clone the repository and install the dependencies:
 
 ```bash
-git clone https://github.com/<your-username>/<your-repo>.git (inserire nome finale)
+git clone https://github.com/wilabcnit/multi_hop_industrial_simulator.git
 cd <your-repo>
 pip install <package_name>==<package_version>
 ```
