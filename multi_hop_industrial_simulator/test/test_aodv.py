@@ -1,3 +1,9 @@
+"""
+    Copyright (C) 2025 Sara Cavallero, Andrea Pumilia, Giampaolo Cuozzo, Lorenzo Mario Amorosa, Chiara Buratti
+    Licensed under the GNU General Public License v3 (GPL-3.0)
+    This program comes WITHOUT ANY WARRANTY; see <https://www.gnu.org/licenses/gpl-3.0.html#license-text>.
+"""
+
 import copy
 import psutil
 import math
