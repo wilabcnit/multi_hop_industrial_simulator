@@ -136,7 +136,7 @@ This project has been developed and tested with **Python 3.9.18** and the follow
 Clone the repository and install the dependencies:
 
 ```bash
-git clone https://github.com/<your-username>/<your-repo>.git (inserire nome finale)
+git clone https://github.com/wilabcnit/multi_hop_industrial_simulator.git
 cd <your-repo>
 pip install <package_name>==<package_version>
 ```
@@ -181,18 +181,24 @@ Average number of interferers =  0.40626721855654885
 To run more complex experiments, simply edit inputs.yaml and adjust the parameters of interest.
 
 ## Authors
-- Sara Cavallero: main author and reference person 
-- Andrea Pumilia
-- Giampaolo Cuozzo
-- Lorenzo Mario Amorosa
-- Chiara Buratti
+- Sara Cavallero: main author and reference person. She is with the National Laboratory of Wireless Communications (WiLab), CNIT, Italy.
+- Andrea Pumilia: is with Astreo S.r.l., Italy.
+- Giampaolo Cuozzo: is with the National Laboratory of Wireless Communications (WiLab), CNIT, Italy.
+- Lorenzo Mario Amorosa: is with the Department of Electrical, Electronics, and Information Engineering ”Guglielmo Marconi” of the University of Bologna, Italy.
+- Chiara Buratti: is with the Department of Electrical, Electronics, and Information Engineering ”Guglielmo Marconi” of the University of Bologna, Italy.
 
-Sara Cavallero, and Giampaolo Cuozzo are with the National Laboratory of Wireless Communications (WiLab), CNIT, Italy.
-Andrea Pumilia is with Astreo S.r.l., Italy.
-Lorenzo Mario Amorosa and Chiara Buratti are with the Department of Electrical, Electronics, and Information Engineering ”Guglielmo Marconi” of the University of Bologna, Italy.
+## Contributions
+We welcome contributions to this project. To ensure a smooth and consistent development process, please refer to the CONTRIBUTING.md file for detailed guidelines on how to contribute, report issues, or propose enhancements.
+
+Your contributions, whether through bug reports, feature requests, or code improvements, are highly appreciated and help maintain the quality and sustainability of the project.
+
+## Citation
+If you use this project in your work, please cite it following the instructions in CITATION.ff. Proper citation acknowledges the effort of the authors and supports the continued development and maintenance of the project.
+
 ## Related publications
 The main reference for the simulator is the paper: "MAC and Routing Protocols Design in Multi-Hop Terahertz Networks", S. Cavallero, A. Pumilia, G. Cuozzo, L.M. Amorosa, C. Buratti, submitted to IEEE Open Journal of the Communications Society, 2025.
 ## License
-
+This project is licensed under the **GNU General Public License v3.0 (GPLv3)**.  
+See the LICENSE file in the project root for the full license text or visit the link: https://www.gnu.org/licenses/gpl-3.0.html#license-text.
 
 
