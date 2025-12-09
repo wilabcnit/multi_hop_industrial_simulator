@@ -5678,7 +5678,7 @@ for seed in range(initial_seed, final_seed + 1):
                                                 # The UE has not received an ACK because of PHY or MAC problems
                                                 ue.set_retransmission_packets(retransmission_bool=True)
 
-                                    if ue.ack_rx_with_success is True and ue.get_last_action() == 0:  # se è False -> non ho ricevuto nulla, non devo aggiornare nulla ?
+                                    if ue.ack_rx_with_success is True and ue.get_last_action() == 0:
                                         ue.unicast_handling_no_reward_no_neighbor_update()
                                         remain_in_wait_ack = False
 
