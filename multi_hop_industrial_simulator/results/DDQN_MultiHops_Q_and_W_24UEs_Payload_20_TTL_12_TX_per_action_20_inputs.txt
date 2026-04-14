@@ -1,0 +1,201 @@
+{
+"traffic_rt": {
+"type": 1,
+"isochronous": 0,
+"period": 0.003,
+"sensor_type": 0,
+"payload": 30,
+"kpi_latency": 1000,
+"kpi_reliability": 99.999,
+"percentage_of_ue": 0
+},
+"traffic_cn": {
+"type": 2,
+"camera_type": 0,
+"period": 0.0083,
+"resolution_type": 0,
+"payload": 10000000,
+"kpi_latency": 1000,
+"kpi_reliability": 99.999,
+"percentage_of_ue": 0
+},
+"traffic_nrt": {
+"type": 3,
+"collection_on": true,
+"collection_standby": false,
+"optimization": false,
+"collection_on_duration": 0.1,
+"collection_standby_duration": 0.05,
+"optimization_duration": 0.15,
+"data_collection": {
+"period": 0.005,
+"payload_on": 200,
+"payload_standby": 40
+},
+"machine_optimization": {
+"scale": 0.01,
+"payload": 150
+},
+"kpi_latency": 1000,
+"kpi_reliability": 99.999,
+"percentage_of_ue": 0
+},
+"traffic_fq": {
+"type": 4,
+"payload": 20,
+"overhead_data": 10,
+"percentage_of_ue": 100
+},
+"radio": {
+"carrier_frequency_ghz": 300,
+"bandwidth_ghz": 15,
+"bit_rate_gbits": 30,
+"modulation_order": 4
+},
+"channel": {
+"input_file_name": "./timessim/channel_models/molecular_absorption_coefficients.xlsx",
+"input_sheet_name": "Values",
+"input_column_names": [
+"Carrier frequency [Hz]",
+"Molecular absorption coefficient [m^-1]"
+],
+"path_loss_exponent": 2,
+"snr_th_db": 10,
+"sir_th_db": 10,
+"sinr_th_db": 10,
+"noise_temperature": 290,
+"nlos_absorption_loss_db": 20,
+"shadowing_std_dev_db": 4,
+"shadowing_coherence_time_ms": 0.01,
+"fading_param": 1,
+"apply_fading": false,
+"antenna_gain_model": "input",
+"use_huawei_measurements": true,
+"p_succ_phy": 0.9
+},
+"core_network": {
+"delay_ms": 0.1
+},
+"geometry": {
+"machine_size": 2,
+"inter_machine_distance": 5
+},
+"ue": {
+"ue_spatial_distribution": "Grid",
+"ue_starting_state": "IDLE",
+"max_buffer_size": 10000000000000000,
+"ue_transmit_power_dbm": 30,
+"ue_gain_db": 5,
+"ue_number_of_antennas": 1,
+"ue_noise_figure_db": 5,
+"ue_antenna_efficiency": 1
+},
+"bs": {
+"number_of_bs": 1,
+"bs_starting_state": "RX",
+"bs_transmit_power_dbm": 35,
+"bs_gain_db": 10,
+"bs_number_of_antennas": 25,
+"bs_antenna_efficiency": 1,
+"bs_noise_figure_db": 4
+},
+"ris": {
+"ris_spatial_distribution": "Uniform",
+"ris_size": 2,
+"number_of_ris": 0,
+"num_configurations": 3,
+"config_dimension": 2,
+"processing_delay": 100
+},
+"scenario": {
+"name": "grid",
+"input_file_name": "input_scenario_grid.xlsx",
+"input_sheet_names": {
+"birex": "bi-rex_layout",
+"aetna": "aetna_layout",
+"aetna_wcnc": "aetna_layout_WCNC",
+"aetna_eucnc": "aetna_layout_EUCNC",
+"aetna_deliverable": "aetna_layout_deliverable_TIMES",
+"huawei": "huawei_layout",
+"custom": "custom_layout",
+"grid": "grid_layout"
+},
+"machine_type": "full"
+},
+"aloha_protocol": {
+"ack_size_bytes": 10,
+"contention_window_int": 15,
+"max_n_retx_per_packet": 3,
+"max_n_packets_to_be_forwarded": 14,
+"hop_limit": 4
+},
+"simulation": {
+"tot_simulation_time_s": 0.0006,
+"n_simulations": 35,
+"initial_number_of_ues": 24,
+"step_number_of_ues": 6,
+"final_number_of_ues": 24,
+"initial_seed": 18,
+"final_seed": 18,
+"seed": 18,
+"enable_print": false,
+"star_topology": false,
+"mobility_obstacle": false,
+"mobility_step_size": 2.25,
+"mobility_spawn": false,
+"mobility_shuffle": false,
+"mobility_changes": 3
+},
+"power_consumed_ue": {
+"idle": 0.0001,
+"backoff": 0.0005,
+"propagation_data": 0,
+"propagation_ack": 0,
+"tx_data": 0.001,
+"wait_ack": 0.0005,
+"low_power": 0.05
+},
+"power_consumed_bs": {
+"rx": 0.5,
+"tx_ack": 1
+},
+"rl": {
+"router": {
+"alfa_uni_ack": 1,
+"alfa_uni_no_ack": 0.6,
+"alfa_broad_change": 0.7,
+"alfa_broad_no_change": 0.0,
+"energy_factor": 0.1,
+"TTL": 12,
+"dummy_bs": true,
+"contention_window_int_init": 13,
+"contention_window_int_min": 5,
+"contention_window_int_max": 20,
+"max_n_packets_to_be_forwarded_init": 12,
+"max_n_packets_to_be_forwarded_min": 4,
+"max_n_packets_to_be_forwarded_max": 19
+},
+"agent": {
+"n_actions": 3,
+"max_len_replay_buffer": 15000,
+"learning_rate": 0.01,
+"batch_size": 256,
+"discount_factor": 0.95,
+"n_episodes": 60,
+"n_steps": 60,
+"n_simulations_for_training": 5,
+"best_score": 0,
+"DDQN": true,
+"3DQN": false,
+"Rainbow_DQN": false,
+"New_state": true,
+"DRL_nodes_number": 4,
+"DRL_type_state": 2,
+"number_of_tx_data_per_step": 20,
+"goal_oriented": "S",
+"normalized_S": true,
+"skip_config": true,
+"skip_config_portion_time": 6
+}
+}
+}
