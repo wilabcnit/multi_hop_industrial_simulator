@@ -1,5 +1,5 @@
 # multi_hop_industrial_simulator
-This is a discrete-time network simulator, written in Python, that models a THz [^1] wireless network for an Industrial Internet of Things (IIoT) scenario in the context of the TIMES project (www.times6g.eu). 
+This is a discrete-time network simulator, written in Python, that models a THz [^1] wireless network for an Industrial Internet of Things (IIoT) scenario in the context of the SNS JU TIMES project (www.times6g.eu, Grant Agreement No. 101096307). 
 It is designed to evaluate the performance of multi-hop communication in a factory-like scenario, with a focus on success probability, average latency, network throughput and jain index.
 
 [^1]: Although developed for THz communications, the simulator can also be configured for other frequency bands through appropriate parameter tuning.
