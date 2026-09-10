@@ -106,18 +106,18 @@ scenario:
 
 aloha_protocol:
     ack_size_bytes: 10  # [B]
-    contention_window_int: 5
+    contention_window_int: 5  # Action!
     max_n_retx_per_packet: 3
-    max_n_packets_to_be_forwarded: 4
+    max_n_packets_to_be_forwarded: 4 # Action!
     hop_limit: 4
 
 # High-Level simulation parameters
 simulation:
     tot_simulation_time_s: 0.0005 # s
-    n_simulations : 1
-    initial_number_of_ues : 6
+    n_simulations : 295
+    initial_number_of_ues : 24
     step_number_of_ues : 6
-    final_number_of_ues : 6
+    final_number_of_ues : 24
     initial_seed: 18
     final_seed: 18
     seed: 18
@@ -165,7 +165,7 @@ rl:
         discount_factor : 0.95
         n_episodes : 60
         n_steps : 60
-        n_simulations_for_training : 5 #50
+        n_simulations_for_training : 275
         best_score : 0
         DDQN: True
         3DQN: False
@@ -173,7 +173,7 @@ rl:
         New_state: True
         DRL_nodes_number: 4
         DRL_type_state: 2
-        number_of_tx_data_per_step: 3
+        number_of_tx_data_per_step: 20
         goal_oriented: 'S' # 'S' for throughput, 'L' for latency, 'S%L' for throughput and latency
         normalized_S: True # True if the throughput in the RL state is normalized, False otherwise
         skip_config: True # True if the RL agent skips the configuration to compute the metrics, False otherwise
