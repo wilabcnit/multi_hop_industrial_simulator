@@ -182,9 +182,9 @@ To run more complex experiments, simply edit inputs.yaml and adjust the paramete
 
 ## Authors
 - Sara Cavallero: main author and reference person. She is with the National Laboratory of Wireless Communications (WiLab), CNIT, Italy.
-- Andrea Pumilia: is with Astreo S.r.l., Italy.
-- Giampaolo Cuozzo: is with the National Laboratory of Wireless Communications (WiLab), CNIT, Italy.
 - Lorenzo Mario Amorosa: is with the Department of Electrical, Electronics, and Information Engineering ”Guglielmo Marconi” of the University of Bologna, Italy.
+- Giampaolo Cuozzo: is with the National Laboratory of Wireless Communications (WiLab), CNIT, Italy.
+- Andrea Pumilia: is with Astreo S.r.l., Italy.
 - Chiara Buratti: is with the Department of Electrical, Electronics, and Information Engineering ”Guglielmo Marconi” of the University of Bologna, Italy.
 
 ## Contributions
@@ -196,7 +196,7 @@ Your contributions, whether through bug reports, feature requests, or code impro
 If you use this project in your work, please cite it following the instructions in CITATION.ff. Proper citation acknowledges the effort of the authors and supports the continued development and maintenance of the project.
 
 ## Related publications
-The main reference for the simulator is the paper: "MAC and Routing Protocols Design in Multi-Hop Terahertz Networks", S. Cavallero, A. Pumilia, G. Cuozzo, L.M. Amorosa, C. Buratti, submitted to IEEE Access, 2026.
+The main reference for the simulator is the paper: "MAC and Routing Protocols Design in Multi-Hop Terahertz Networks", S. Cavallero, L.M. Amorosa, G. Cuozzo, A. Pumilia, C. Buratti, IEEE Access, 2026.
 ## License
 This project is licensed under the **GNU General Public License v3.0 (GPLv3)**.  
 See the LICENSE file in the project root for the full license text or visit the link: https://www.gnu.org/licenses/gpl-3.0.html#license-text.
