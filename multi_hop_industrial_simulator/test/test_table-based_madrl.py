@@ -4,12 +4,10 @@
     This program comes WITHOUT ANY WARRANTY; see <https://www.gnu.org/licenses/gpl-3.0.html#license-text>.
 """
 
-# Dependencies
 import math
+import psutil
 import os
 import sys
-import gc
-import psutil
 import numpy as np
 from scipy import constants
 import random
@@ -21,12 +19,15 @@ from datetime import datetime
 from multi_hop_industrial_simulator.network.bs import BS
 from multi_hop_industrial_simulator.network.ue import Ue
 
+from multi_hop_industrial_simulator.utils.plot_data import plot_factory, plot_scenario_2d, write_data
+
 from multi_hop_industrial_simulator.utils.check_success import check_collision
 from multi_hop_industrial_simulator.utils.check_success import check_collision_bs
 
 from multi_hop_industrial_simulator.utils.compute_distance_m import compute_distance_m
 from multi_hop_industrial_simulator.utils.compute_propagation_delays import compute_propagation_delays
 from multi_hop_industrial_simulator.utils.compute_simulation_outputs import compute_simulator_outputs
+
 from multi_hop_industrial_simulator.utils.instantiate_bs import instantiate_bs
 from multi_hop_industrial_simulator.utils.read_input_file import read_input_file
 from multi_hop_industrial_simulator.utils.read_inputs import read_inputs
@@ -40,25 +41,23 @@ from multi_hop_industrial_simulator.utils.check_for_neighbours import check_for_
 
 from multi_hop_industrial_simulator.utils.set_ues_los_condition import set_ues_los_condition
 
-# RL dependencies
+from collections import deque
+
+# MADRL: always unicast → next-hop selected via routing table (get_max_index)
+from multi_hop_industrial_simulator.utils.utils_for_tb_ualoha_with_dqn import get_max_index
 
 import tensorflow as tf
-from collections import deque
-from multi_hop_industrial_simulator.ddqn_agent.dqn_agent_rl_mesh import (training_step, get_model, optimizer, loss_fn,
-                                                                         update_target_model)
-from multi_hop_industrial_simulator.utils.plot_rewards_per_n_ue import plot_rewards_per_n_ue
-from multi_hop_industrial_simulator.utils.choose_next_action import choose_next_action_tb_no_RL
-from multi_hop_industrial_simulator.utils.choose_next_action_Q_and_W import  choose_next_action_tb_only_W, choose_next_action_tb_only_Q
+from tensorflow import keras
 
-# Enable the garbage collector
+import gc
+
 gc.enable()
-
-# Disable the CUDA device for this script, run with the CPU
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
 """ 
     Utility functions for modifying the UEs states
 """
+
 
 # Function to move to the idle state
 def go_in_idle(input_ue: Ue, current_tick: int, input_enable_print: bool):
@@ -77,7 +76,6 @@ def go_in_idle(input_ue: Ue, current_tick: int, input_enable_print: bool):
     input_ue.set_state_duration(input_ticks=ue.get_next_packet_generation_instant())
     # Compute energy spent
     ue.energy_consumed += power_idle * (ue.get_state_duration() - t) * simulator_tick_duration_s
-    # ue.energy_consumed += power_idle * (ue.get_state_duration() - t)
     if input_enable_print:
         print('UE ', input_ue.get_ue_id(), ' goes in IDLE from t = ', current_tick, ' until t = ',
               input_ue.get_state_duration())
@@ -88,34 +86,177 @@ def get_backoff_duration(input_ue: Ue, input_contention_window_int: int, input_t
                          input_max_prop_delay_tick: int):
     """
 
-     Args:
-       input_ue: Ue:
-       input_contention_window_int: int: integer value representing the contention window size
-       input_t_backoff_tick: int: backoff duration in ticks
-       input_max_prop_delay_tick: int: maximum propagation delay in ticks
+    Args:
+      input_ue: Ue:
+      input_contention_window_int: int: integer value representing the contention window size
+      input_t_backoff_tick: int: backoff duration in ticks
+      input_max_prop_delay_tick: int: maximum propagation delay in ticks
 
-     Returns:
-         overall backoff state duration in ticks
+    Returns:
+        overall backoff state duration in ticks
 
-     """
+    """
     # The BO duration of a given UE is a function of its own retransmission pattern
     exp_backoff_factor = pow(2, input_ue.get_ul_buffer().get_first_packet().get_num_tx())
-    if input_contention_window_int != 0:
-        delay_tick = random.randint(1, exp_backoff_factor * input_contention_window_int)
-    else:
-        delay_tick = 0
+    delay_tick = random.randint(1, exp_backoff_factor * input_contention_window_int)
     data_duration_tick = input_ue.get_data_duration_tick()
     if star_topology:
         return delay_tick * input_t_backoff_tick
     else:
         return data_duration_tick + input_max_prop_delay_tick + delay_tick * input_t_backoff_tick
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# MADRL helpers
+# ─────────────────────────────────────────────────────────────────────────────
+
+def build_dueling_ddqn(n_inputs: int, n_actions: int, learning_rate: float) -> keras.Model:
+    """Build a Dueling DDQN online/target model from scratch (no existing buggy code)."""
+    inp = keras.Input(shape=(n_inputs,), dtype=tf.float32)
+    x = keras.layers.Dense(64, activation='relu')(inp)
+    x = keras.layers.Dense(64, activation='relu')(x)
+    # Value stream
+    val = keras.layers.Dense(32, activation='relu')(x)
+    val = keras.layers.Dense(1, name='value')(val)
+    # Advantage stream
+    adv = keras.layers.Dense(32, activation='relu')(x)
+    adv = keras.layers.Dense(n_actions, name='advantage')(adv)
+    # Combine: Q = V + (A - mean(A))
+    q_vals = keras.layers.Lambda(
+        lambda va: va[0] + va[1] - tf.reduce_mean(va[1], axis=1, keepdims=True),
+        name='q_values'
+    )([val, adv])
+    model = keras.Model(inputs=inp, outputs=q_vals)
+    model.compile(optimizer=keras.optimizers.Nadam(learning_rate=learning_rate),
+                  loss=keras.losses.Huber())
+    return model
+
+
+def ddqn_train_step(online_model: keras.Model,
+                    target_model: keras.Model,
+                    replay_buffer,
+                    batch_size: int,
+                    gamma: float,
+                    n_actions: int):
+    """One DDQN training step using Huber loss and Nadam optimizer."""
+    if len(replay_buffer) < batch_size:
+        return  # not enough samples yet
+
+    indices = np.random.choice(len(replay_buffer), size=batch_size, replace=False)
+    batch = [replay_buffer[i] for i in indices]
+
+    states = np.array([t[0] for t in batch], dtype=np.float32)
+    actions = np.array([t[1] for t in batch], dtype=np.int32)
+    rewards = np.array([t[2] for t in batch], dtype=np.float32)
+    next_states = np.array([t[3] for t in batch], dtype=np.float32)
+    dones = np.array([t[4] for t in batch], dtype=np.float32)
+
+    # DDQN target: use online to select action, target to evaluate it
+    next_q_online = online_model(next_states, training=False).numpy()  # (B, n_actions)
+    next_q_target = target_model(next_states, training=False).numpy()  # (B, n_actions)
+    best_actions = np.argmax(next_q_online, axis=1)  # (B,)
+    target_q = rewards + (1.0 - dones) * gamma * next_q_target[np.arange(batch_size), best_actions]
+
+    # Build full Q-target matrix (only update the taken action)
+    current_q = online_model(states, training=False).numpy()
+    current_q[np.arange(batch_size), actions] = target_q
+
+    online_model.fit(states, current_q, batch_size=batch_size, epochs=1, verbose=0)
+
+
+def choose_unicast_madrl(input_ue: Ue, input_enable_print: bool = False):
+    """Routing for MADRL-TB:
+    - When no confirmed neighbours exist (obs[0] all-zeros): **forced broadcast**
+      for initial neighbour discovery (protocol-level, not an RL action).
+    - Once routing info is available: **always unicast** to the best next-hop
+      chosen by get_max_index (never broadcast as a routing action).
+
+    This mirrors the semantics of choose_next_action_tb_no_RL but removes
+    broadcast as a possible routing action once the table is populated.
+    """
+    # Relay flag
+    counter_fw = sum(1 for p in input_ue.ul_buffer.buffer_packet_list
+                     if p.get_data_to_be_forwarded_bool())
+    input_ue.set_relay_bool(relay_bool=(counter_fw > 0))
+
+    if input_ue.new_action_bool is True:
+        input_ue.new_action_bool = False
+        # Identify the packet we are going to send
+        for packet in input_ue.get_updated_packet_list():
+            if packet.get_data_to_be_forwarded_bool() is False:
+                input_ue.action_packet_id = packet.get_id()
+                break
+
+        if input_enable_print:
+            print("UE ", input_ue.get_ue_id(), "set action packet id to: ",
+                  input_ue.action_packet_id)
+            print("UE ", input_ue.get_ue_id(), " neighbour table: ", input_ue.obs[0])
+            print("UE ", input_ue.get_ue_id(), " ack rx: ", input_ue.obs[1])
+            print("UE ", input_ue.get_ue_id(), " TTL: ", input_ue.obs[3])
+            print("UE ", input_ue.get_ue_id(), " bs seen: ", input_ue.obs[4])
+
+        # ── routing decision ────────────────────────────────────────────────
+        if (input_ue.next_action is None or
+                (input_ue.next_action == 3 and
+                 (input_ue.obs[0][-1] == 1 or
+                  np.sum(input_ue.obs[0] * input_ue.obs[4]) > 0))):
+
+            if np.sum(input_ue.obs[0]) == 0:
+                # No confirmed neighbours yet → forced broadcast for discovery
+                # (protocol-level bootstrap, NOT an RL routing action)
+                input_ue.set_last_action(input_last_action=2)
+                input_ue.set_broadcast_bool(input_broadcast_bool=True)
+                input_ue.forced_broadcast_actions_counter += 1
+                input_ue.reset_temp_obs()
+                if input_enable_print:
+                    print("UE ", input_ue.get_ue_id(),
+                          " has no neighbours -> Forced Broadcasting (discovery)")
+            else:
+                # Routing info available → always unicast (MADRL policy)
+                input_ue.set_last_action(input_last_action=0)
+                input_ue.set_broadcast_bool(input_broadcast_bool=False)
+                hop_index = get_max_index(input_ue.obs[0], input_ue.obs[1],
+                                          input_ue.obs[2], input_ue.obs[4])
+                if hop_index is None:
+                    known = [i for i, v in enumerate(input_ue.obs[0]) if v > 0]
+                    hop_index = known[0] if known else len(input_ue.neighbour_table) - 1
+                input_ue.set_unicast_rx_address(
+                    input_unicast_rx_address=input_ue.neighbour_table[hop_index])
+                input_ue.set_unicast_rx_index(input_unicast_rx_index=hop_index)
+                input_ue.copy_unicast_rx_address = input_ue.unicast_rx_address
+                if input_enable_print:
+                    print("UE ", input_ue.get_ue_id(), " → unicast to ",
+                          input_ue.get_unicast_rx_address())
+
+        elif (input_ue.next_action == 3 and
+              input_ue.obs[0][-1] == 0 and
+              np.sum(input_ue.obs[0] * input_ue.obs[4]) == 0):
+            # Self-received packet with no path to BS → forced broadcast
+            input_ue.next_action = None
+            input_ue.set_last_action(input_last_action=2)
+            input_ue.set_broadcast_bool(input_broadcast_bool=True)
+            input_ue.forced_broadcast_actions_counter += 1
+            input_ue.reset_temp_obs()
+            if input_enable_print:
+                print("UE ", input_ue.get_ue_id(),
+                      " self-received packet, no BS path -> Forced Broadcasting")
+
+    # Assign address to every buffered packet
+    for packet in input_ue.ul_buffer.buffer_packet_list:
+        if input_ue.get_broadcast_bool() is False:
+            packet.address = str(input_ue.get_unicast_rx_address())
+        else:
+            packet.address = "-1"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+
 # Function to move to the BO state
 def go_in_backoff(input_ue: Ue, current_tick: int, input_backoff_duration_tick: int, input_enable_print: bool):
     """
 
     Args:
-      input_ue: Ue: 
+      input_ue: Ue:
       current_tick: int: current tick of simulation
       input_backoff_duration_tick: int: backoff duration in ticks
       input_enable_print: bool: True if print enabled.
@@ -134,17 +275,17 @@ def go_in_backoff(input_ue: Ue, current_tick: int, input_backoff_duration_tick: 
     input_ue.set_state_final_tick(input_tick=input_ue.get_state_duration())
     # Compute energy spent
     ue.energy_consumed += power_bo * (ue.get_state_duration() - t) * simulator_tick_duration_s
-    # ue.energy_consumed += power_bo * (ue.get_state_final_tick() - t)
     if input_enable_print:
         print('UE ', input_ue.get_ue_id(), ' goes in BO from t = ', current_tick, ' until t = ',
               input_ue.get_state_duration())
+
 
 # Function to move to the TX_DATA state
 def go_in_tx_data(input_ue: Ue, current_tick: int, input_enable_print: bool):
     """
 
     Args:
-      input_ue: Ue: 
+      input_ue: Ue:
       current_tick: int: current tick of simulation
       input_enable_print: bool: True if print enabled.
 
@@ -170,8 +311,6 @@ def go_in_tx_data(input_ue: Ue, current_tick: int, input_enable_print: bool):
     ue.end_data_tx = current_tick
     index = 0
     for packet in ue_packet_list:
-        # For each packet increase the number of packet tx in this step
-        input_ue.Q_and_W_pcks_tx_per_step_counter += 1
         if packet.get_retransmission_packets() is False:
             packet.hop_count += 1
             if enable_print:
@@ -182,6 +321,8 @@ def go_in_tx_data(input_ue: Ue, current_tick: int, input_enable_print: bool):
         if packet.get_data_to_be_forwarded_bool() is True:
             ue.set_relay_bool(relay_bool=True)
             packet.set_data_unicast(input_data_unicast=False)
+            # NOTE: This UE can receive data of different size from UEs belonging to other traffic types
+
             data_duration_tick += packet.get_packet_duration_tick()
             data_size_bytes += packet.get_size()
 
@@ -213,19 +354,16 @@ def go_in_tx_data(input_ue: Ue, current_tick: int, input_enable_print: bool):
 
     # Compute energy spent
     ue.energy_consumed += power_tx * (ue.get_state_duration() - t) * simulator_tick_duration_s
-    # ue.energy_consumed += power_tx * (ue.get_state_final_tick() - t)
-    # if enable_print:
-    #     print("Energy for UE ", ue.get_ue_id(), " = ", ue.energy_consumed / simulator_tick_duration_s,
-    #           " computed from t = ", t, " to t = ", ue.get_state_final_tick())
 
     return data_size_bytes
+
 
 # Function to move to the TX_ACK state
 def go_in_tx_ack(input_ue: Ue, current_tick: int, input_ack_duration_tick: int, input_enable_print: bool):
     """
 
     Args:
-      input_ue: Ue: 
+      input_ue: Ue:
       current_tick: int: current tick of simulation
       input_ack_duration_tick: int: current duration in ticks of ACK
       input_enable_print: bool: True if print enabled.
@@ -245,20 +383,18 @@ def go_in_tx_ack(input_ue: Ue, current_tick: int, input_ack_duration_tick: int, 
     if input_enable_print:
         print('UE ', input_ue.get_ue_id(), ' goes in TX ACK from t = ', current_tick, ' until t = ',
               input_ue.get_state_duration())
+
     # Compute energy spent
     ue.energy_consumed += power_tx * (ue.get_state_duration() - t) \
                           * simulator_tick_duration_s
-    # ue.energy_consumed += power_tx * (ue.get_state_final_tick() - t)
-    # if enable_print:
-    #     print("Energy for UE ", ue.get_ue_id(), " = ", ue.energy_consumed / simulator_tick_duration_s,
-    #           " computed from t = ", t, " to t = ", ue.get_state_final_tick())
+
 
 # Function to move to the TX_ACK state for the BS
 def go_in_tx_ack_bs(input_bs: BS, current_tick: int, input_ack_duration_tick: int, input_enable_print: bool):
     """
 
     Args:
-      input_bs: BS: 
+      input_bs: BS:
       current_tick: int: current simulation tick
       input_ack_duration_tick: int: current duration in ticks of the ACK
       input_enable_print: bool: True if print enabled.
@@ -274,13 +410,14 @@ def go_in_tx_ack_bs(input_bs: BS, current_tick: int, input_ack_duration_tick: in
     if input_enable_print:
         print('The BS goes in TX_ACK from t =', current_tick, ' to t = ', input_bs.get_state_duration())
 
+
 # Function to move to the WAIT_ACK state
 def go_in_wait_ack(input_ue: Ue, current_tick: int, input_wait_ack_duration_tick: int,
                    input_enable_print: bool = True):
     """
 
     Args:
-      input_ue: Ue: 
+      input_ue: Ue:
       current_tick: int: current tick of simulation
       input_wait_ack_duration_tick: int: duration in ticks of WAIT_ACK state
       input_enable_print: bool:  True if print enabled.
@@ -303,17 +440,14 @@ def go_in_wait_ack(input_ue: Ue, current_tick: int, input_wait_ack_duration_tick
 
     # Compute energy spent
     ue.energy_consumed += power_ack * (ue.get_state_duration() - t) * simulator_tick_duration_s
-    # ue.energy_consumed += power_ack * (ue.get_state_final_tick() - t)
-    # if enable_print:
-    #     print("Energy for UE ", ue.get_ue_id(), " = ", ue.energy_consumed / simulator_tick_duration_s,
-    #           " computed from t = ", t, " to t = ", ue.get_state_final_tick())
+
 
 # Function to move to the RX_ACK for the BS
 def go_rx_ack_bs(input_bs: BS, current_tick: int, input_rx_duration_tick: int, input_enable_print: bool = True):
     """
 
     Args:
-      input_bs: BS: 
+      input_bs: BS:
       current_tick: int: current simulation tick
       input_rx_duration_tick: int: current duration of ACK RX for BS
       input_enable_print: bool: True if print enabled.
@@ -324,8 +458,7 @@ def go_rx_ack_bs(input_bs: BS, current_tick: int, input_rx_duration_tick: int, i
     """
     input_bs.set_state(input_state='RX')
     input_bs.set_state_duration(input_ticks=input_rx_duration_tick)
-    # if input_enable_print:
-    #     print('The BS goes in RX from t =', current_tick, ' to t = ', input_bs.get_state_duration())
+
 
 # Function to create the simulation timing structure
 def create_simulator_timing_structure(input_n_ue: int, input_simulation_duration_tick: int):
@@ -352,9 +485,9 @@ def create_simulator_timing_structure(input_n_ue: int, input_simulation_duration
                                                               dtype=int)  # starting tick, ending tick, destination UE,
                 # packet ID for which the ACK is sent
         ue_value['DATA_RX']['BS'] = np.array([[input_simulation_duration_tick + 1] * 4], dtype=int)
-
+        # starting tick, ending tick, DATA size, packet ID
         ue_value['ACK_RX']['BS'] = np.array([[input_simulation_duration_tick + 1] * 4], dtype=int)
-
+        # starting tick, ending tick, destination UE, packet ID for which the ACK is sent
         output_simulator_timing_structure[ue_key] = ue_value
 
     bs_key = 'BS'
@@ -366,6 +499,7 @@ def create_simulator_timing_structure(input_n_ue: int, input_simulation_duration
                                                              dtype=int)
     output_simulator_timing_structure[bs_key] = bs_value
     return output_simulator_timing_structure
+
 
 # Function to reset the simulator timing structure
 def reset_simulator_timing_structure(output_simulator_timing_structure: dict, input_simulation_duration_tick: int):
@@ -387,10 +521,10 @@ def reset_simulator_timing_structure(output_simulator_timing_structure: dict, in
             value_ext['ACK_RX'][key_int] = np.array([[input_simulation_duration_tick + 1] * 4],
                                                     dtype=int)  # starting tick, ending tick, size
 
+
 # Function to insert an item inside the simulator timing structure
 def insert_item_in_timing_structure(input_simulator_timing_structure: dict, input_starting_tick: int,
                                     input_final_tick: int, input_third_field: int, input_fourth_field: int,
-                                    # Size for data, and UE ID for ACK
                                     input_tx_key: str, input_type_key: str, input_rx_key: str):
     """
 
@@ -412,6 +546,7 @@ def insert_item_in_timing_structure(input_simulator_timing_structure: dict, inpu
     input_simulator_timing_structure[input_rx_key][input_type_key][input_tx_key] = (
         np.vstack([input_simulator_timing_structure[input_rx_key][input_type_key][input_tx_key], new_addition]))
 
+
 # Function to remove an item from the simulator timing structure
 def remove_item_in_timing_structure(input_simulator_timing_structure: dict, input_tx_key: str, input_type_key: str,
                                     input_rx_key: str):
@@ -432,6 +567,7 @@ def remove_item_in_timing_structure(input_simulator_timing_structure: dict, inpu
     input_simulator_timing_structure[input_rx_key][input_type_key][input_tx_key] = np.delete(
         input_simulator_timing_structure[input_rx_key][input_type_key][input_tx_key], 1, axis=0)
 
+
 # Function to find a data RX inside the simulator timing structure at a given tick for a given UE
 def find_data_rx_times_tick(input_simulator_timing_structure: dict, input_ue_id: int, current_tick: int):
     """
@@ -451,6 +587,8 @@ def find_data_rx_times_tick(input_simulator_timing_structure: dict, input_ue_id:
     output_data_rx_at_ue_packet_id = list()
     ue_id = list()
     index = 0
+    # need to return a list of UEs, packet IDs and packet sizes otherwise it is not possible to detect
+    #  correctly the reception of two or more packets perfectly overlapped
     for ue_key_ext in input_simulator_timing_structure.keys():
         if ue_key_ext == f'UE_{input_ue_id}':
             for ue_key_int in input_simulator_timing_structure[ue_key_ext]['DATA_RX'].keys():
@@ -468,6 +606,7 @@ def find_data_rx_times_tick(input_simulator_timing_structure: dict, input_ue_id:
 
     return output_data_rx_at_ue_starting_tick, output_data_rx_at_ue_ending_tick, output_data_rx_at_ue_size_bytes, \
         output_data_rx_at_ue_packet_id, ue_id
+
 
 # Function to find a data RX inside the simulator timing structure at a given tick for the BS
 def find_data_rx_times_at_bs_tick(input_simulator_timing_structure: dict, current_tick: int):
@@ -492,11 +631,14 @@ def find_data_rx_times_at_bs_tick(input_simulator_timing_structure: dict, curren
         if min_row[1] == current_tick:
             output_data_rx_at_bs_starting_tick = min_row[0]
             output_data_rx_at_bs_ending_tick = min_row[1]
+            output_data_rx_at_bs_size_bytes = min_row[2]
             output_data_rx_packet_id.append(min_row[3])
             # Pick-up the UE ID so that the traffic type can be inferred
             ue_id.append(int(ue_key_int[3:]))
+            # break
 
     return output_data_rx_at_bs_starting_tick, output_data_rx_at_bs_ending_tick, output_data_rx_packet_id, ue_id
+
 
 # Function to find a ACK RX inside the simulator timing structure at a given tick for the BS
 def find_ack_rx_times_at_bs_tick(input_simulator_timing_structure: dict, current_tick: int):
@@ -517,6 +659,8 @@ def find_ack_rx_times_at_bs_tick(input_simulator_timing_structure: dict, current
     output_ack_rx_transmitter_id_str = list()
     output_ack_rx_packet_id = list()
     n_ack_rx_simultaneously = None
+    # need to return a list of UEs, list of ACKs for given packet IDs and otherwise it is not possible to
+    #  detect correctly the reception of two or more ACKs perfectly overlapped
     for ue_key_ext in input_simulator_timing_structure.keys():
         if ue_key_ext == 'BS':
             for ue_key_int in input_simulator_timing_structure[ue_key_ext]['ACK_RX'].keys():
@@ -534,7 +678,7 @@ def find_ack_rx_times_at_bs_tick(input_simulator_timing_structure: dict, current
                         output_ack_rx_transmitter_id_str.append(ue_key_int)
                     n_ack_rx_simultaneously = np.count_nonzero(
                         input_simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int][:, 1] == min_tick_rx)
-                    # print("n_ack_rx_simultaneously: ", n_ack_rx_simultaneously, " from: ", ue_key_int, " at t = ", current_tick)
+
                     if n_ack_rx_simultaneously == 1:
                         # simultaneously from the same UE
                         output_ack_rx_packet_id.append(min_row[3])
@@ -571,6 +715,9 @@ def find_ack_rx_times_tick(input_simulator_timing_structure: dict, input_ue_id: 
     output_ack_rx_packet_id = list()  # list of ack packet id
     output_ack_rx_sources = list()  # list of ack sources
     output_ack_rx_dest = list()  # list of ack dest
+
+    # need to return a list of UEs, list of ACKs for given packet IDs and otherwise it is not possible to
+    #  detect correctly the reception of two or more ACKs perfectly overlapped
     for ue_key_ext in input_simulator_timing_structure.keys():
         if ue_key_ext == f'UE_{input_ue_id}' or ue_key_ext == 'BS':
             for ue_key_int in input_simulator_timing_structure[ue_key_ext]['ACK_RX'].keys():
@@ -591,9 +738,8 @@ def find_ack_rx_times_tick(input_simulator_timing_structure: dict, input_ue_id: 
 
             break
 
-    return (
-    output_ack_rx_at_ue_starting_tick, output_ack_rx_at_ue_ending_tick, output_ack_rx_sources, output_ack_rx_dest,
-    output_ack_rx_packet_id)
+    return (output_ack_rx_at_ue_starting_tick, output_ack_rx_at_ue_ending_tick, output_ack_rx_sources,
+            output_ack_rx_dest, output_ack_rx_packet_id)
 
 
 sys.path.append(os.path.dirname(os.getcwd()))
@@ -608,7 +754,6 @@ scenario_name = inputs.get('scenario').get('name')
 scenario_file_name = inputs.get('scenario').get('input_file_name')
 initial_seed = inputs.get('simulation').get('initial_seed')
 final_seed = inputs.get('simulation').get('final_seed')
-# seed = inputs.get('simulation').get('seed')
 ue_distribution_type = inputs.get('ue').get('ue_spatial_distribution')
 ue_distribution = inputs.get('ue').get('ue_spatial_distribution')
 initial_number_of_ues = inputs.get('simulation').get('initial_number_of_ues')
@@ -623,7 +768,9 @@ on_collection_nrt_s = inputs.get('traffic_nrt').get('collection_on_duration')
 standby_collection_nrt_s = inputs.get('traffic_nrt').get('collection_standby_duration')
 optimization_nrt_s = inputs.get('traffic_nrt').get('optimization_duration')
 ack_size_bytes = inputs.get('aloha_protocol').get('ack_size_bytes')
+contention_window_int = inputs.get('aloha_protocol').get('contention_window_int')
 max_n_retx_per_packet = inputs.get('aloha_protocol').get('max_n_retx_per_packet')
+max_n_packets_to_be_forwarded = inputs.get('aloha_protocol').get('max_n_packets_to_be_forwarded')
 bit_rate_gbits = inputs.get('radio').get('bit_rate_gbits')
 apply_fading = inputs.get('channel').get('apply_fading')
 n_simulations = inputs.get('simulation').get('n_simulations')
@@ -653,50 +800,56 @@ noise_figure_ue = 10 ** (noise_figure_ue_db / 10)
 noise_figure_bs_db = inputs.get('bs').get('bs_noise_figure_db')
 noise_figure_bs = 10 ** (noise_figure_bs_db / 10)
 
-hop_limit = inputs.get('aloha_protocol').get('hop_limit')
-TTL = inputs.get('rl').get('router').get('TTL')
-
-mobility_obstacle = inputs.get('simulation').get('mobility_obstacle')
-step_size = inputs.get('simulation').get('mobility_step_size')
-mobility_spawn = inputs.get('simulation').get('mobility_spawn')
-mobility_shuffle = inputs.get('simulation').get('mobility_shuffle')
-mobility_changes = inputs.get('simulation').get('mobility_changes')
-
-# RL inputs
-#contention_window_int = inputs.get('aloha_protocol').get('contention_window_int')
-contention_window_int_init = inputs.get('rl').get('router').get('contention_window_int_init')
-contention_window_int_min = inputs.get('rl').get('router').get('contention_window_int_min')
-contention_window_int_max = inputs.get('rl').get('router').get('contention_window_int_max')
-#max_n_packets_to_be_forwarded = inputs.get('aloha_protocol').get('max_n_packets_to_be_forwarded')
-max_n_packets_to_be_forwarded_init = inputs.get('rl').get('router').get('max_n_packets_to_be_forwarded_init')
-max_n_packets_to_be_forwarded_min = inputs.get('rl').get('router').get('max_n_packets_to_be_forwarded_min')
-max_n_packets_to_be_forwarded_max = inputs.get('rl').get('router').get('max_n_packets_to_be_forwarded_max')
-number_of_tx_data_per_step = inputs.get('rl').get('agent').get('number_of_tx_data_per_step')
-
+broadcast_ampl_factor_no_change = inputs.get('rl').get('router').get(
+    'alfa_broad_no_change')  # (minimum = 0.5 to keep the reward between 1 and 0)
+broadcast_ampl_factor_change = inputs.get('rl').get('router').get('alfa_broad_change')
+unicast_ampl_factor_no_ack = inputs.get('rl').get('router').get(
+    'alfa_uni_no_ack')  # (minimum = 0.5 to keep the reward between 1 and 0)
+unicast_ampl_factor_ack = inputs.get('rl').get('router').get('alfa_uni_ack')
+energy_factor = inputs.get('rl').get('router').get('energy_factor')
+TTL = inputs.get('rl').get('router').get('TTL')  # mi serve
 n_actions = inputs.get('rl').get('agent').get('n_actions')
 batch_size = inputs.get('rl').get('agent').get('batch_size')
 discount_factor = inputs.get('rl').get('agent').get('discount_factor')
 
 n_simulations_for_training = inputs.get('rl').get('agent').get('n_simulations_for_training')
 max_len_replay_buffer = inputs.get('rl').get('agent').get('max_len_replay_buffer')
-#max_len_replay_buffer = int(max_len_replay_buffer /number_of_tx_data_per_step)
 best_score = inputs.get('rl').get('agent').get('best_score')
-DDQN = inputs.get('rl').get('agent').get('DDQN')
 
-goal_oriented = inputs.get('rl').get('agent').get('goal_oriented')
-normalized_S = inputs.get('rl').get('agent').get('normalized_S')
+mobility_obstacle = inputs.get('simulation').get('mobility_obstacle')
+step_size = inputs.get('simulation').get('mobility_step_size')
+mobility_spawn = inputs.get('simulation').get('mobility_spawn')
+mobility_shuffle = inputs.get('simulation').get('mobility_shuffle')
+mobility_changes = inputs.get('simulation').get('mobility_changes')
+ack_tx_bs_seen = 0
+hop_limit = inputs.get('aloha_protocol').get('hop_limit')
 
-skip_config = inputs.get('rl').get('agent').get('skip_config')
-skip_config_portion_time = inputs.get('rl').get('agent').get('skip_config_portion_time')
+# ── MADRL parameters ──────────────────────────────────────────────────────────
+W_init = inputs.get('rl').get('router').get('contention_window_int_init')
+W_min = inputs.get('rl').get('router').get('contention_window_int_min')
+W_max = inputs.get('rl').get('router').get('contention_window_int_max')
+Q_init = inputs.get('rl').get('router').get('max_n_packets_to_be_forwarded_init')
+Q_min = inputs.get('rl').get('router').get('max_n_packets_to_be_forwarded_min')
+Q_max = inputs.get('rl').get('router').get('max_n_packets_to_be_forwarded_max')
+learning_rate_madrl = inputs.get('rl').get('agent').get('learning_rate')
+T_step_madrl = inputs.get('rl').get('agent').get('number_of_tx_data_per_step')
+n_simulations_for_training = inputs.get('rl').get('agent').get('n_simulations_for_training')
+n_actions_madrl = 3  # {−−, ==, ++}  for W and Q independently
+sigma_r = 0.5  # reward weight for successful TX
+beta_r = 0.25  # reward weight for no max-retx drop
+delta_r = 0.25  # reward weight for no full-buffer drop
+target_update_freq = 100  # hard target-network update every N training calls
+epsilon_start = 1.0
+epsilon_end = 0.01
+# ─────────────────────────────────────────────────────────────────────────────
 
 # Initializations
-ack_tx_bs_seen = 0
 phy_success = False  # True if a transmission is successful at PHY layer, False otherwise
 mac_success = False  # True if a transmission is successful at MAC layer, False otherwise
 output_dict = {}  # Dictionary where keys are the metrics to be computed and the values contain the corresponding output
 # for each UE in the form (N x M), where N is the number of times we loop over a different number of UEs
 # and M is the number of simulations
-output_keys = ["p_mac", "s_ue", "s", "l", "e", "j_index", "Discarded_packets_full_queue_percentage", "Discarded_packets_max_rtx_percentage", "avg_Q", "avg_W"]
+output_keys = ["p_mac", "s_ue", "s", "l", "e", "j_index"]
 
 # Loop over the output keys and initialize matrices for each key
 n_simulated_ues = abs((final_number_of_ues - initial_number_of_ues) // step_number_of_ues) + 1
@@ -704,18 +857,18 @@ for output_key in output_keys:
     # Ensure the top-level key exists in the dictionary
     if output_key not in output_dict:
         output_dict[output_key] = {}
-    # Configure the output dict with the metrics per UE
+
     for n_ue_index, n_ue in enumerate(range(initial_number_of_ues, final_number_of_ues + 1, step_number_of_ues)):
         # Ensure the N={n_ue} key exists
         if f"N={n_ue}" not in output_dict[output_key]:
             output_dict[output_key][f"N={n_ue}"] = {}
 
-        for n_sim in range(n_simulations - 15):
+        for n_sim in range(n_simulations):
             # Initialize the array with the correct shape
             output_dict[output_key][f"N={n_ue}"][f"Sim={n_sim}"] = np.zeros(n_ue)
 
 # Pick up input scenario
-if scenario_name in ['birex', 'aetna', 'custom', 'aetna_wcnc', 'aetna_deliverable', 'grid']:
+if scenario_name in ['grid']:
     scenario_sheet_name = inputs.get('scenario').get('input_sheet_names').get(scenario_name)
     scenario_df = read_input_file(file_name=scenario_file_name, sheet_name=scenario_sheet_name, reset_index=True)
 else:
@@ -782,42 +935,13 @@ for machine in machine_array:
                        (machine.z_center - bs.z) ** 2)
 
 """
-    Loop over an given number of seeds
+    Loop over an given number of UEs (n_ues)
 """
 for seed in range(initial_seed, final_seed + 1):
     print("*************** Seed: ", seed)
-    # Set the seed, for simulation reproducibility
     random.seed(seed)
     np.random.seed(seed)
-    tf.random.set_seed(seed)
 
-    # Check which RL algorithm is used and which optimization is enabled
-    if DDQN:
-        if goal_oriented == "S&L":
-            init_W_model = get_model(input_n_actions=n_actions, input_n_nodes=3)
-            init_W_target_model = get_model(input_n_actions=n_actions, input_n_nodes=3)
-            init_Q_model = get_model(input_n_actions=n_actions, input_n_nodes=4)
-            init_Q_target_model = get_model(input_n_actions=n_actions, input_n_nodes=4)
-        elif goal_oriented == "S":
-            init_W_model = get_model(input_n_actions=n_actions, input_n_nodes=2)
-            init_W_target_model = get_model(input_n_actions=n_actions, input_n_nodes=2)
-            init_Q_model = get_model(input_n_actions=n_actions, input_n_nodes=3)
-            init_Q_target_model = get_model(input_n_actions=n_actions, input_n_nodes=3)
-        elif goal_oriented == "L":
-            init_W_model = get_model(input_n_actions=n_actions, input_n_nodes=2)
-            init_W_target_model = get_model(input_n_actions=n_actions, input_n_nodes=2)
-            init_Q_model = get_model(input_n_actions=n_actions, input_n_nodes=3)
-            init_Q_target_model = get_model(input_n_actions=n_actions, input_n_nodes=3)
-
-        # Compile the model with the optimizer and loss function
-        init_W_model.compile(optimizer=optimizer, loss=loss_fn)
-        init_W_target_model.compile(optimizer=optimizer, loss=loss_fn)
-        init_Q_model.compile(optimizer=optimizer, loss=loss_fn)
-        init_Q_target_model.compile(optimizer=optimizer, loss=loss_fn)
-
-    """
-        Set the number of UEs with the input value provided by the user
-    """
     for n_ue_index, n_ue in enumerate(range(initial_number_of_ues, final_number_of_ues + 1, step_number_of_ues)):
         print("*************** Number of UEs: ", n_ue)
 
@@ -830,6 +954,9 @@ for seed in range(initial_seed, final_seed + 1):
         # Update the number of UEs
         distribution_class.set_number_of_ues(input_n_ues=n_ue)
 
+        """
+            Repeat the simulation for a given number of times (n_simulations)
+        """
         ue_coordinates = dict()
         copy_ue_coordinates_dict = dict()
         for ue in range(n_ue):
@@ -841,7 +968,6 @@ for seed in range(initial_seed, final_seed + 1):
             single_ue_coordinates[ue] = []
             copy_ue_coordinates_dict[ue] = []
 
-        ################################ RL Implementation ######################################
         ue_array = instantiate_ues(input_params_dict=inputs, tot_number_of_ues=n_ue, starting_state=ue_starting_state,
                                    t_state_tick=t_idle_tick, simulator_tick_duration=simulator_tick_duration_s,
                                    bit_rate_gbits=bit_rate_gbits, max_n_retx_per_packet=max_n_retx_per_packet)
@@ -870,7 +996,6 @@ for seed in range(initial_seed, final_seed + 1):
         print("The max propagation delay is", max_prop_delay_tick)
 
         # Set UE LoS/NLoS condition
-        # Set UE LoS/NLoS condition
         if ue_distribution_type != "Grid":
 
             for i in range(0, len(ue_array)):
@@ -892,7 +1017,8 @@ for seed in range(initial_seed, final_seed + 1):
                                  input_shadowing_sample_index=0, input_thz_channel=thz_channel,
                                  input_carrier_frequency_ghz=carrier_frequency_ghz, input_bandwidth_hz=bandwidth_hz,
                                  input_apply_fading=apply_fading, input_clutter_density=clutter_density,
-                                 antenna_gain_model=antenna_gain_model, use_channel_measurements=use_channel_measurements,
+                                 antenna_gain_model=antenna_gain_model,
+                                 use_channel_measurements=use_channel_measurements,
                                  input_average_clutter_height_m=average_machine_height_m)
 
             compute_propagation_delays(ue_array=ue_array, bs=bs,
@@ -910,59 +1036,6 @@ for seed in range(initial_seed, final_seed + 1):
                                                           link='ue_ue')
                     ue_array[j].is_in_los_ues.append(los_condition)
 
-        # THIS IS A CHECK for the phy_success condition
-        for ue in ue_array:
-            tx_rx_distance_m = compute_distance_m(tx=ue, rx=bs)
-            shadowing_sample_index = 0
-            snr_db = thz_channel.get_3gpp_snr_db(
-                tx=ue, rx=bs,
-                carrier_frequency_ghz=carrier_frequency_ghz,
-                tx_rx_distance_m=tx_rx_distance_m,
-                apply_fading=apply_fading,
-                bandwidth_hz=bandwidth_hz,
-                clutter_density=clutter_density,
-                input_shadowing_sample_index=shadowing_sample_index,
-                antenna_gain_model=antenna_gain_model,
-                use_channel_measurements=use_channel_measurements,
-                input_average_clutter_height_m=average_machine_height_m,
-                los_cond='bs_ue')
-            if snr_db > sinr_th_db:
-                success = True
-            else:
-                success = False
-            # print("DISTANCE BS - UE ", ue.get_ue_id(), " = ", tx_rx_distance_m)
-            print("UE ", ue.ue_id, " PHY SUCCESS with BS: ", success)
-            print("SNR = ", snr_db)
-
-        for ue in ue_array:
-            for other_ue in ue_array:
-                if other_ue != ue:
-                    tx_rx_distance_m = compute_distance_m(tx=ue, rx=other_ue)
-                    # print("DISTANCE UE ", ue.get_ue_id(), " - UE ", other_ue.get_ue_id(), " = ", tx_rx_distance_m)
-                    shadowing_sample_index = 0
-                    snr_db = thz_channel.get_3gpp_snr_db(
-                        tx=ue, rx=other_ue,
-                        carrier_frequency_ghz=carrier_frequency_ghz,
-                        tx_rx_distance_m=tx_rx_distance_m,
-                        apply_fading=apply_fading,
-                        bandwidth_hz=bandwidth_hz,
-                        clutter_density=clutter_density,
-                        input_shadowing_sample_index=shadowing_sample_index,
-                        antenna_gain_model=antenna_gain_model,
-                        use_channel_measurements=use_channel_measurements,
-                        input_average_clutter_height_m=average_machine_height_m,
-                        los_cond='ue_ue')
-                    if snr_db > sinr_th_db:
-                        success = True
-                    else:
-                        success = False
-
-                    # if success is True:
-                    print("UE ", ue.ue_id, " PHY SUCCESS with UE: ", other_ue.ue_id, " = ", success)
-                    print("SNR = ", snr_db)
-            #
-
-
         print("The max propagation delay is", max_prop_delay_tick)
 
         # Initialization of the RL parameter
@@ -973,34 +1046,36 @@ for seed in range(initial_seed, final_seed + 1):
         for ue_index, ue in enumerate(ue_array):
             ue.set_neighbour_table(input_neighbour_table=nodes_list[:ue_index] + nodes_list[ue_index + 1:])
             tx_results["UE_" + str(ue.get_ue_id())] = {j: 0 for j in ue.get_neighbour_table()}
-            # print("Coordinates, x: ",ue.saved_coordinates[0], " y: ", ue.saved_coordinates[1], " z: ", ue.saved_coordinates[2])
-            # reset the counter for the forced broadcast actions
             ue.forced_broadcast_actions_counter = 0
+            # ── MADRL: per-UE Dueling DDQN models (persistent across simulations) ──
+            ue.madrl_W = W_init
+            ue.madrl_Q = Q_init
+            ue.madrl_ddqn1_online = build_dueling_ddqn(2, n_actions_madrl, learning_rate_madrl)
+            ue.madrl_ddqn1_target = build_dueling_ddqn(2, n_actions_madrl, learning_rate_madrl)
+            ue.madrl_ddqn1_target.set_weights(ue.madrl_ddqn1_online.get_weights())
+            ue.madrl_ddqn2_online = build_dueling_ddqn(3, n_actions_madrl, learning_rate_madrl)
+            ue.madrl_ddqn2_target = build_dueling_ddqn(3, n_actions_madrl, learning_rate_madrl)
+            ue.madrl_ddqn2_target.set_weights(ue.madrl_ddqn2_online.get_weights())
+            ue.madrl_rb1 = deque(maxlen=max_len_replay_buffer)
+            ue.madrl_rb2 = deque(maxlen=max_len_replay_buffer)
+            ue.madrl_train_counter1 = 0  # counts training calls for target-net sync
+            ue.madrl_train_counter2 = 0
+            ue.madrl_prev_state1 = None
+            ue.madrl_prev_state2 = None
+            ue.madrl_prev_action1 = None
+            ue.madrl_prev_action2 = None
+            ue.reward_history = []  # ← per-UE reward log (persists across simulations)
+            # ── Per-UE policy/ablation logs (persist across simulations) ──────
+            ue.policy_a1_hist = []  # W action selected  (0/1/2)
+            ue.policy_a2_hist = []  # Q action selected  (0/1/2)
+            ue.policy_explore_hist = []  # True = random (ε), False = greedy
+            ue.policy_W_hist = []  # W value AFTER action
+            ue.policy_Q_hist = []  # Q value AFTER action
+            ue.policy_epsilon_hist = []  # ε at time of selection
+            ue.policy_nt_ratio_hist = []  # nt_ratio state feature
+            ue.policy_buf_util_hist = []  # buffer-utilisation state feature
+            ue.policy_sim_hist = []  # simulation index
 
-            model_W_copy = tf.keras.models.clone_model(init_W_model)
-            model_W_copy.set_weights(init_W_model.get_weights())
-            target_model_W_copy = tf.keras.models.clone_model(init_W_target_model)
-            target_model_W_copy.set_weights(init_W_target_model.get_weights())
-
-            model_Q_copy = tf.keras.models.clone_model(init_Q_model)
-            model_Q_copy.set_weights(init_Q_model.get_weights())
-            target_model_Q_copy = tf.keras.models.clone_model(init_Q_target_model)
-            target_model_Q_copy.set_weights(init_Q_target_model.get_weights())
-
-            ue.set_W_model(input_model=model_W_copy)
-            ue.set_W_target_model(input_target_model=target_model_W_copy)
-            ue.set_Q_model(input_model=model_Q_copy)
-            ue.set_Q_target_model(input_target_model=target_model_Q_copy)
-            ue.set_W_simulations_reward(input_simulations_reward=[])
-            ue.set_Q_simulations_reward(input_simulations_reward=[])
-            ue.set_epsilon(input_epsilon=1)
-            ue.Q_and_W_saved_state_Q = []
-            ue.Q_and_W_saved_state_W = []
-        ################################End RL Implementation####################################
-
-        """
-            Repeat the simulation for a given number of times (n_simulations)
-        """
         for n_simulation in range(n_simulations):
             print("***** Simulation number: ", n_simulation)
 
@@ -1039,7 +1114,6 @@ for seed in range(initial_seed, final_seed + 1):
             bs.rx_data = False
             bs.id_ues_data_rx = list()
             for ue in ue_array:
-                ue.set_n_data_discarded(input_n_data_discarded=0)
                 ue.set_n_data_tx(input_n_data_tx=0)
                 ue.set_n_data_rx(input_n_data_rx=0)
                 ue.set_state(input_state=ue_starting_state)
@@ -1055,16 +1129,13 @@ for seed in range(initial_seed, final_seed + 1):
                 bs.packet_id_received[ue.get_ue_id()] = ([])
                 bs.temp_packet_id_received[ue.get_ue_id()] = ([])
 
-                # Reset of the RL observation for each simulation
                 ue.set_retransmission_packets(retransmission_bool=False)
                 ue.set_relay_bool(relay_bool=False)
                 ue.reset_temp_obs()
                 ue.set_old_state(input_old_state=None)
                 ue.reset_obs()
                 ue.set_packets_sent(input_packets_sent=0)
-                #ue.set_reward(input_reward=[])
-                ue.set_W_reward(input_reward=[])
-                ue.set_Q_reward(input_reward=[])
+                ue.set_reward(input_reward=[])
                 ue.set_last_action(input_last_action=None)
                 ue.set_unicast_rx_address(input_unicast_rx_address=None)
                 ue.set_unicast_rx_index(input_unicast_rx_index=None)
@@ -1096,11 +1167,8 @@ for seed in range(initial_seed, final_seed + 1):
                 ue.ues_colliding_at_ue = list()
                 ue.data_rx_at_ue_ue_id_list = list()
                 ue.latency_ue = list()
-                ue.discarded_packets = 0
 
                 ue.n_generated_packets = 0
-                ue.packets_discarded_full_queue = 0
-                ue.packets_discarded_max_rtx = 0
 
                 ue.forward_in_bo = False
                 ue.packet_forward = False
@@ -1116,129 +1184,70 @@ for seed in range(initial_seed, final_seed + 1):
                         ue.dict_ack_sent_from_ue[other_ue.get_ue_id()] = ([])
 
                 ue_coordinates_list.append(ue.starting_coordinates)
-                print("UE ", ue.get_ue_id(), " Coordinates: ", ue.starting_coordinates)
                 copy_ue_coordinates_dict[ue.get_ue_id()].append(ue.starting_coordinates.tolist())
+
             ues_colliding_at_bs = list()
             ues_interfering_at_bs = list()
 
-            #################################### Multi-hop implementation ####################################
             ues_no_phy_colliding_at_bs = list()
             ues_no_phy_colliding_pck_type_at_bs = list()
             ues_no_phy_colliding_at_ue = list()
             ues_no_phy_colliding_pck_type_at_ue = list()
-            #################################### End Multi-hop implementation ####################################
 
             # Initialization of the RL parameter
             nodes_list = [str(ue.get_ue_id()) for ue in ue_array] + ['BS']  # mi serve -> lista per tab vicini
 
-            # Reset the UE parameters
             for ue_index, ue in enumerate(ue_array):
-                ue.set_W_replay_buffer(input_replay_buffer=deque(maxlen=max_len_replay_buffer))
-                ue.set_Q_replay_buffer(input_replay_buffer=deque(maxlen=max_len_replay_buffer))
+                ue.set_replay_buffer(input_replay_buffer=deque(maxlen=max_len_replay_buffer))
+                # lista di stringhe
                 ue.set_neighbour_table(input_neighbour_table=nodes_list[:ue_index] + nodes_list[
-                                                                                     ue_index + 1:])
+                                                                                     ue_index + 1:])  # mi serve: tab vicini per ogni UE
                 # ue.obs[0]: neighbour_table,
                 # ue.obs[1]: lista ack ricevuti per ogni vicino,
                 # ue.obs[2]: potenza ricevuta dall'ultima tx per ogni vicino
                 # ue.obs[3]: TTL di ogni vicino
                 ue.reset_obs()
-                ue.reset_temp_obs()
+                ue.reset_temp_obs()  # ***
                 ue.set_last_action(input_last_action=None)
                 ue.set_broadcast_bool(input_broadcast_bool=False)
                 ue.new_action_bool = True
                 ue.next_action = None
                 ue.first_bo_entry = True
                 ue.first_entry = False
-                ue.copy_buffer_packet_list = None
-                ue.action_packet_id = None
-                ue.designated_rx = False
+                ue.copy_buffer_packet_list = None  # mi serve
+                ue.action_packet_id = None  # mi serve
+                ue.designated_rx = False  # mi serve (per unicast)
                 ue.set_actions_per_simulation(input_actions_per_simulation=[[], [], [], []])
                 ue.set_success_actions_per_simulation(input_success_actions_per_simulation=[[], []])
                 ue.saved_coordinates = ue.get_coordinates()
                 keys = nodes_list[:ue_index] + nodes_list[ue_index + 1:]
                 ue.packets_to_be_removed = {key: [] for key in keys}
-
                 ue.forward_in_bo = False
                 ue.packet_forward = False
                 ue.forward_in_ack = False
                 ue.multihop_bool = True
 
-                # RL
-                ue.Q_and_W_latencies = list()
-                ue.Q_and_W_buffer_length = max_n_packets_to_be_forwarded_init
-                ue.Q_and_W_contention_window = contention_window_int_init
-                ue.Q_and_W_previous_latency = 0
-                ue.Q_and_W_tx_data_counter = 0
-                ue.Q_and_W_acks_rx_per_step_counter = 0
-                ue.Q_and_W_pcks_tx_per_step_counter = 0
-
-                ################################### Only W RL ########################################
-                ue.W_enabled = True
-                # S&L state:
-                # Ratio of PCK_TX with success / mean(PCK_TX with success);
-                # Ratio of RTX of PCK_TX with success / mean(Ratio of RTX of PCK_TX with success),
-                # normalized linear interpolation of W
-                if goal_oriented == "S&L":
-                    ue.W_current_state = [0, 0, 0]
-                elif goal_oriented == "S":
-                    ue.W_current_state = [0,0]
-                elif goal_oriented == "L":
-                    ue.W_current_state = [0,0]
-
-                ue.W_previous_state = deepcopy(ue.W_current_state)
-                ue.W_pcks_tx_with_success = list()
-                ue.W_pcks_tx_with_success.append(0)
-                ue.W_rtx_pcks_tx_with_success = list()
-                ue.W_rtx_pcks_tx_with_success.append([])
-                ue.W_dropped_pcks_per_step_counter = 0
-                ue.W_not_added_pcks_per_step_counter = 0
-                ue.W_forbidden_action = False
-                ue.W_last_action = -1
-                ue.set_W_action_list(input_action_list=[])
-                ue.W_start_tick_params_window = 0
-                ue.Q_and_W_saved_state_W.append([])
-                ue.Q_and_W_saved_state_W[-1].append(ue.Q_and_W_contention_window)
-
-
-                ################################### Only Q RL ########################################
-                ue.Q_enabled = True
-                # S&L state:
-                # Ratio of PCK_TX with success / mean(PCK_TX with success);
-                # Ratio of RTX of PCK_TX with success / mean(Ratio of RTX of PCK_TX with success),
-                # Buffer Utilization
-                # normalized linear interpolation of Q
-                if goal_oriented == "S&L":
-                    ue.Q_current_state = [0, 0, 0, 0]
-                elif goal_oriented == "S":
-                    ue.Q_current_state = [0, 0, 0]
-                elif goal_oriented == "L":
-                    ue.Q_current_state = [0, 0, 0]
-
-                ue.Q_previous_state = deepcopy(ue.Q_current_state)
-                ue.Q_pcks_tx_with_success = list()
-                ue.Q_pcks_tx_with_success.append(0)
-                ue.Q_rtx_pcks_tx_with_success = list()
-                ue.Q_rtx_pcks_tx_with_success.append([])
-                ue.Q_buffer_utilization = list()
-                ue.Q_dropped_pcks_per_step_counter = 0
-                ue.W_not_added_pcks_per_step_counter = 0
-                ue.Q_forbidden_action = False
-                ue.Q_last_action = -1
-                ue.set_Q_action_list(input_action_list=[])
-                ue.Q_start_tick_params_window = 0
-                ue.Q_and_W_saved_state_Q.append([])
-                ue.Q_and_W_saved_state_Q[-1].append(ue.Q_and_W_buffer_length)
+            # ── MADRL: per-simulation counter reset & ε schedule ─────────────────
+            epsilon_madrl = max(epsilon_end,
+                                epsilon_start - (n_simulation / max(1, n_simulations_for_training - 1))
+                                * (epsilon_start - epsilon_end))
+            for ue in ue_array:
+                ue.madrl_nt = 0  # successful TX in current step
+                ue.madrl_nt_sum = 0.0  # cumulative Nt values (for running avg)
+                ue.madrl_nt_count = 0  # number of completed steps (for running avg)
+                ue.madrl_step_cnt = 0  # per-step TX counter
+                ue.madrl_dr = True  # no max-retx drop in current step
+                ue.madrl_dq = True  # no full-buffer drop in current step
+            # ─────────────────────────────────────────────────────────────────────
 
             packet_already_in_queue = False
             packet_generated_by_ue_itself = False
             packet_out_of_hop_limit = False
 
-            # Reset the skip config to compute the metrics on the correct portion of the simulator
-            skip_config_executed = False
-
             """
                 Simulation starts for a given simulation time  
             """
+
             # Code to plot the factory in 2D or 3D
             # plot_factory(factory_length=geometry_class.get_factory_length(),
             #              factory_width=geometry_class.get_factory_width(),
@@ -1259,328 +1268,317 @@ for seed in range(initial_seed, final_seed + 1):
             #                  scenario_name=scenario_name,
             #                  save_file=f'./multi_hop_industrial_simulator/results/plot_{scenario_name}_scenario_2d.png',
             #                  )
-            # Mobility disabled
+
             t_change = 0
             next_t_change = 0
             for ue in ue_array:
-                # print("UE ", ue.ue_id, "(", ue.x, "; ", ue.y, "; ", ue.z, ")")
                 d_from_bs = np.sqrt((ue.x - bs.x) ** 2 + (ue.y - bs.y) ** 2 + (ue.z - bs.z) ** 2)
 
                 for other_ue in ue_array:
                     if ue != other_ue:
                         d_from_ue = np.sqrt((ue.x - other_ue.x) ** 2 + (ue.y - other_ue.y) ** 2 +
                                             (ue.z - other_ue.z) ** 2)
-                        # print("d from UE ", other_ue.ue_id, " = ", d_from_ue)
-            # End Mobility
+
             while t <= tot_simulation_time_tick:
-                # Mobility disabled
-                # Mobility
+                # Mobility code: there are pre-defined instant of time with different types of movement in the environment ->
+                # it's important to update the simulator timing structure to save the old state of each UE and update
+                # the current state based on the new coordinates
+                # We need to do that because after the movement it could happen that a UE is no more able to rx a packet
+                # from another UE because it is out of its range
                 copy_simulator_timing_structure = deepcopy(simulator_timing_structure)
                 if t == next_t_change and t > 0:
                     t_change = t
 
-                if mobility_obstacle:
-                    # Machine movement:
-                    pilot_x_min = pilot_y_min = 1.25
-                    pilot_x_max = pilot_y_max = 18.75
-                    min_x, max_x = machine_array[0].x_center, machine_array[0].x_center
-                    min_y, max_y = machine_array[0].y_center, machine_array[0].y_center
+                    if mobility_obstacle:  # Move obstacles in a clockwise manner in the environment with a fix step size
+                        # Machine movement:
+                        pilot_x_min = pilot_y_min = 1.25
+                        pilot_x_max = pilot_y_max = 18.75
+                        min_x, max_x = machine_array[0].x_center, machine_array[0].x_center
+                        min_y, max_y = machine_array[0].y_center, machine_array[0].y_center
 
-                    for machine in machine_array:
-                        if pilot_x_min <= machine.x_center < min_x:
-                            min_x = machine.x_center
-                        if pilot_x_max >= machine.x_center > max_x:
-                            max_x = machine.x_center
-                        if pilot_y_min <= machine.y_center < min_y:
-                            min_y = machine.y_center
-                        if pilot_y_max >= machine.y_center > max_y:
-                            max_y = machine.y_center
+                        for machine in machine_array:
+                            if pilot_x_min <= machine.x_center < min_x:
+                                min_x = machine.x_center
+                            if pilot_x_max >= machine.x_center > max_x:
+                                max_x = machine.x_center
+                            if pilot_y_min <= machine.y_center < min_y:
+                                min_y = machine.y_center
+                            if pilot_y_max >= machine.y_center > max_y:
+                                max_y = machine.y_center
 
-                    for machine in machine_array:
-                        new_x, new_y = machine.move_machine(machine.x_center, machine.y_center, step_size,
-                                                            min_x, max_x, min_y, max_y)
-                        machine.set_coordinates(new_x, new_y, machine.z_center)
-                        machine = Machine(x_center=new_x, y_center=new_y, z_center=machine.z_center,
-                                          machine_size=machine.get_machine_size(),
-                                          max_number_of_ues=machine.get_max_number_of_ues())
+                        for machine in machine_array:
+                            new_x, new_y = machine.move_machine(machine.x_center, machine.y_center, step_size,
+                                                                min_x, max_x, min_y, max_y)
+                            machine.set_coordinates(new_x, new_y, machine.z_center)
+                            machine = Machine(x_center=new_x, y_center=new_y, z_center=machine.z_center,
+                                              machine_size=machine.get_machine_size(),
+                                              max_number_of_ues=machine.get_max_number_of_ues())
 
-                elif mobility_spawn:
-                    # Just 2 movement check if the tick is before the half
-                    if t_change < 0.5 * tot_simulation_time_tick:
-                        machine_array[8].set_coordinates(3.25, machine_array[8].y_center, machine_array[8].z_center)
-                        machine_array[9].set_coordinates(machine_array[9].x_center, 7.75, machine_array[9].z_center)
-                        machine_array[10].set_coordinates(16.75, machine_array[10].y_center,
-                                                          machine_array[10].z_center)
+                    elif mobility_spawn:  # some obstacles appear and disappear within the environment ->
+                        # it could happen that sometimes there are links established within the environment
+                        # and other times there are not
+                        # Just 2 movement check if the tick is before the half
+                        if t_change < 0.5 * tot_simulation_time_tick:
+                            machine_array[8].set_coordinates(3.25, machine_array[8].y_center, machine_array[8].z_center)
+                            machine_array[9].set_coordinates(machine_array[9].x_center, 7.75, machine_array[9].z_center)
+                            machine_array[10].set_coordinates(16.75, machine_array[10].y_center,
+                                                              machine_array[10].z_center)
 
-                    elif t_change > 0.5 * tot_simulation_time_tick and t_change < tot_simulation_time_tick:
-                        machine_array[8].set_coordinates(16.75, machine_array[8].y_center,
-                                                         machine_array[8].z_center)
-                        machine_array[9].set_coordinates(machine_array[9].x_center, 12.25,
-                                                         machine_array[9].z_center)
-                        machine_array[10].set_coordinates(3.25, machine_array[10].y_center,
-                                                          machine_array[10].z_center)
+                        elif t_change > 0.5 * tot_simulation_time_tick and t_change < tot_simulation_time_tick:
+                            machine_array[8].set_coordinates(16.75, machine_array[8].y_center,
+                                                             machine_array[8].z_center)
+                            machine_array[9].set_coordinates(machine_array[9].x_center, 12.25,
+                                                             machine_array[9].z_center)
+                            machine_array[10].set_coordinates(3.25, machine_array[10].y_center,
+                                                              machine_array[10].z_center)
 
-                    else:
-                        machine_array[8].set_coordinates(22, machine_array[8].y_center, machine_array[8].z_center)
-                        machine_array[9].set_coordinates(machine_array[9].x_center, 22, machine_array[9].z_center)
-                        machine_array[10].set_coordinates(22, machine_array[10].y_center,
-                                                          machine_array[10].z_center)
+                        else:
+                            machine_array[8].set_coordinates(22, machine_array[8].y_center, machine_array[8].z_center)
+                            machine_array[9].set_coordinates(machine_array[9].x_center, 22, machine_array[9].z_center)
+                            machine_array[10].set_coordinates(22, machine_array[10].y_center,
+                                                              machine_array[10].z_center)
 
-                    machine_array[8] = Machine(x_center=machine_array[8].x_center,
-                                               y_center=machine_array[8].y_center,
-                                               z_center=machine_array[8].z_center,
-                                               machine_size=machine_array[8].get_machine_size(),
-                                               max_number_of_ues=machine_array[8].get_max_number_of_ues())
+                        machine_array[8] = Machine(x_center=machine_array[8].x_center,
+                                                   y_center=machine_array[8].y_center,
+                                                   z_center=machine_array[8].z_center,
+                                                   machine_size=machine_array[8].get_machine_size(),
+                                                   max_number_of_ues=machine_array[8].get_max_number_of_ues())
 
-                    machine_array[9] = Machine(x_center=machine_array[9].x_center,
-                                               y_center=machine_array[9].y_center,
-                                               z_center=machine_array[9].z_center,
-                                               machine_size=machine_array[9].get_machine_size(),
-                                               max_number_of_ues=machine_array[9].get_max_number_of_ues())
+                        machine_array[9] = Machine(x_center=machine_array[9].x_center,
+                                                   y_center=machine_array[9].y_center,
+                                                   z_center=machine_array[9].z_center,
+                                                   machine_size=machine_array[9].get_machine_size(),
+                                                   max_number_of_ues=machine_array[9].get_max_number_of_ues())
 
-                    machine_array[10] = Machine(x_center=machine_array[10].x_center,
-                                                y_center=machine_array[10].y_center,
-                                                z_center=machine_array[10].z_center,
-                                                machine_size=machine_array[10].get_machine_size(),
-                                                max_number_of_ues=machine_array[10].get_max_number_of_ues())
-                elif mobility_shuffle:
+                        machine_array[10] = Machine(x_center=machine_array[10].x_center,
+                                                    y_center=machine_array[10].y_center,
+                                                    z_center=machine_array[10].z_center,
+                                                    machine_size=machine_array[10].get_machine_size(),
+                                                    max_number_of_ues=machine_array[10].get_max_number_of_ues())
 
-                    for ue in ue_array:
+                    elif mobility_shuffle:  # UEs coordinates are randomly exchanged.
+                        # The result is that each UE occupies a different position after the shuffle
+
+                        for ue in ue_array:
+                            for ue_key_ext in simulator_timing_structure.keys():
+                                if ue_key_ext == f'UE_{ue.get_ue_id()}':
+                                    # Loop over the DATA receptions from other UEs
+                                    for ue_key_int in simulator_timing_structure[ue_key_ext]['DATA_RX'].keys():
+                                        # check the value of the final_state_tick
+                                        if len(simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int]) > 0:
+                                            for array_index in range(
+                                                    len(simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int])):
+                                                if simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int][
+                                                    array_index][0] \
+                                                        != tot_simulation_time_tick + 1 and \
+                                                        simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int][
+                                                            array_index][0] != tot_simulation_time_tick + 1:
+
+                                                    for other_ue in ue_array:
+                                                        if ue_key_int == f'UE_{other_ue.get_ue_id()}':
+                                                            prop_delay_tick = ue.get_prop_delay_to_ue_tick(
+                                                                other_ue.get_ue_id())
+
+                                                            simulator_timing_structure[ue_key_ext]['DATA_RX'][
+                                                                ue_key_int][
+                                                                array_index][0] = \
+                                                                simulator_timing_structure[ue_key_ext]['DATA_RX'][
+                                                                    ue_key_int][
+                                                                    array_index][0] - prop_delay_tick
+                                                            simulator_timing_structure[ue_key_ext]['DATA_RX'][
+                                                                ue_key_int][
+                                                                array_index][1] = \
+                                                                simulator_timing_structure[ue_key_ext]['DATA_RX'][
+                                                                    ue_key_int][
+                                                                    array_index][1] - prop_delay_tick
+
+                                                    if ue_key_int == 'BS':
+                                                        prop_delay_tick = ue.get_prop_delay_to_bs_tick()
+
+                                                        simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int][
+                                                            array_index][0] = \
+                                                            simulator_timing_structure[ue_key_ext]['DATA_RX'][
+                                                                ue_key_int][
+                                                                array_index][0] - prop_delay_tick
+                                                        simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int][
+                                                            array_index][1] = \
+                                                            simulator_timing_structure[ue_key_ext]['DATA_RX'][
+                                                                ue_key_int][
+                                                                array_index][1] - prop_delay_tick
+
+                                    for ue_key_int in simulator_timing_structure[ue_key_ext]['ACK_RX'].keys():
+                                        # check the value of the final_state_tick
+                                        if len(simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int]) > 0:
+                                            for array_index in range(
+                                                    len(simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int])):
+                                                if simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int][
+                                                    array_index][0] \
+                                                        != tot_simulation_time_tick + 1 and \
+                                                        simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int][
+                                                            array_index][0] != tot_simulation_time_tick + 1:
+
+                                                    for other_ue in ue_array:
+                                                        if ue_key_int == f'UE_{other_ue.get_ue_id()}':
+                                                            prop_delay_tick = ue.get_prop_delay_to_ue_tick(
+                                                                other_ue.get_ue_id())
+
+                                                            simulator_timing_structure[ue_key_ext]['ACK_RX'][
+                                                                ue_key_int][
+                                                                array_index][0] = \
+                                                                simulator_timing_structure[ue_key_ext]['ACK_RX'][
+                                                                    ue_key_int][
+                                                                    array_index][0] - prop_delay_tick
+                                                            simulator_timing_structure[ue_key_ext]['ACK_RX'][
+                                                                ue_key_int][
+                                                                array_index][1] = \
+                                                                simulator_timing_structure[ue_key_ext]['ACK_RX'][
+                                                                    ue_key_int][
+                                                                    array_index][1] - prop_delay_tick
+
                         for ue_key_ext in simulator_timing_structure.keys():
-                            if ue_key_ext == f'UE_{ue.get_ue_id()}':
+                            if ue_key_ext == 'BS':
                                 # Loop over the DATA receptions from other UEs
                                 for ue_key_int in simulator_timing_structure[ue_key_ext]['DATA_RX'].keys():
                                     # check the value of the final_state_tick
                                     if len(simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int]) > 0:
                                         for array_index in range(
                                                 len(simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int])):
-                                            if simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int][
-                                                array_index][0] \
-                                                    != tot_simulation_time_tick + 1 and \
+                                            if \
                                                     simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int][
-                                                        array_index][0] != tot_simulation_time_tick + 1:
-                                                # print("Old value for UE_KEY_EXT: ", f'UE_{ue.get_ue_id()}')
+                                                        array_index][
+                                                        0] \
+                                                            != tot_simulation_time_tick + 1 and \
+                                                            simulator_timing_structure[ue_key_ext]['DATA_RX'][
+                                                                ue_key_int][
+                                                                array_index][0] != tot_simulation_time_tick + 1:
+
                                                 for other_ue in ue_array:
                                                     if ue_key_int == f'UE_{other_ue.get_ue_id()}':
-                                                        # print("OLD value for UE_KEY_INT: ", f'UE_{other_ue.get_ue_id()}')
-                                                        # print(" OLD start_tick = ", simulator_timing_structure[ue_key_ext]
-                                                        # ['DATA_RX'][ue_key_int][array_index][0])
-                                                        # print("OLD end tick = ", simulator_timing_structure[ue_key_ext]
-                                                        # ['DATA_RX'][ue_key_int][array_index][1])
+                                                        prop_delay_tick = other_ue.get_prop_delay_to_bs_tick()
 
-                                                        prop_delay_tick = ue.get_prop_delay_to_ue_tick(
-                                                            other_ue.get_ue_id())
-                                                        # print("PROP DELAY: ", prop_delay_tick)
-
-                                                        simulator_timing_structure[ue_key_ext]['DATA_RX'][
-                                                            ue_key_int][
+                                                        simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int][
                                                             array_index][0] = \
                                                             simulator_timing_structure[ue_key_ext]['DATA_RX'][
                                                                 ue_key_int][
                                                                 array_index][0] - prop_delay_tick
-                                                        simulator_timing_structure[ue_key_ext]['DATA_RX'][
-                                                            ue_key_int][
+                                                        simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int][
                                                             array_index][1] = \
                                                             simulator_timing_structure[ue_key_ext]['DATA_RX'][
                                                                 ue_key_int][
                                                                 array_index][1] - prop_delay_tick
-
-                                                if ue_key_int == 'BS':
-                                                    # print("OLD value for BS: ")
-                                                    # print(" OLD start_tick = ", simulator_timing_structure[ue_key_ext]
-                                                    # ['DATA_RX'][ue_key_int][array_index][0])
-                                                    # print("OLD end tick = ", simulator_timing_structure[ue_key_ext]
-                                                    # ['DATA_RX'][ue_key_int][array_index][1])
-
-                                                    prop_delay_tick = ue.get_prop_delay_to_bs_tick()
-                                                    # print("PROP DELAY: ", prop_delay_tick)
-
-                                                    simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int][
-                                                        array_index][0] = \
-                                                        simulator_timing_structure[ue_key_ext]['DATA_RX'][
-                                                            ue_key_int][
-                                                            array_index][0] - prop_delay_tick
-                                                    simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int][
-                                                        array_index][1] = \
-                                                        simulator_timing_structure[ue_key_ext]['DATA_RX'][
-                                                            ue_key_int][
-                                                            array_index][1] - prop_delay_tick
 
                                 for ue_key_int in simulator_timing_structure[ue_key_ext]['ACK_RX'].keys():
                                     # check the value of the final_state_tick
                                     if len(simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int]) > 0:
                                         for array_index in range(
                                                 len(simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int])):
-                                            if simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int][
-                                                array_index][0] \
-                                                    != tot_simulation_time_tick + 1 and \
+                                            if \
                                                     simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int][
-                                                        array_index][0] != tot_simulation_time_tick + 1:
-                                                # print("Old value for UE_KEY_EXT: ", f'UE_{ue.get_ue_id()}')
+                                                        array_index][0] \
+                                                            != tot_simulation_time_tick + 1 and \
+                                                            simulator_timing_structure[ue_key_ext]['ACK_RX'][
+                                                                ue_key_int][
+                                                                array_index][0] != tot_simulation_time_tick + 1:
+
                                                 for other_ue in ue_array:
                                                     if ue_key_int == f'UE_{other_ue.get_ue_id()}':
-                                                        # print("OLD value for UE_KEY_INT: ", f'UE_{other_ue.get_ue_id()}')
-                                                        # print(" OLD start_tick = ", simulator_timing_structure[ue_key_ext]
-                                                        # ['ACK_RX'][ue_key_int][array_index][0])
-                                                        # print("OLD end tick = ", simulator_timing_structure[ue_key_ext]
-                                                        # ['ACK_RX'][ue_key_int][array_index][1])
+                                                        prop_delay_tick = other_ue.get_prop_delay_to_bs_tick()
 
-                                                        prop_delay_tick = ue.get_prop_delay_to_ue_tick(
-                                                            other_ue.get_ue_id())
-                                                        # print("PROP DELAY: ", prop_delay_tick)
-
-                                                        simulator_timing_structure[ue_key_ext]['ACK_RX'][
-                                                            ue_key_int][
+                                                        simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int][
                                                             array_index][0] = \
                                                             simulator_timing_structure[ue_key_ext]['ACK_RX'][
                                                                 ue_key_int][
                                                                 array_index][0] - prop_delay_tick
-                                                        simulator_timing_structure[ue_key_ext]['ACK_RX'][
-                                                            ue_key_int][
+                                                        simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int][
                                                             array_index][1] = \
                                                             simulator_timing_structure[ue_key_ext]['ACK_RX'][
                                                                 ue_key_int][
                                                                 array_index][1] - prop_delay_tick
 
-                    for ue_key_ext in simulator_timing_structure.keys():
-                        if ue_key_ext == 'BS':
-                            # Loop over the DATA receptions from other UEs
-                            for ue_key_int in simulator_timing_structure[ue_key_ext]['DATA_RX'].keys():
-                                # check the value of the final_state_tick
-                                if len(simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int]) > 0:
-                                    for array_index in range(
-                                            len(simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int])):
-                                        if \
-                                                simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int][
-                                                    array_index][
-                                                    0] \
-                                                        != tot_simulation_time_tick + 1 and \
-                                                        simulator_timing_structure[ue_key_ext]['DATA_RX'][
-                                                            ue_key_int][
-                                                            array_index][0] != tot_simulation_time_tick + 1:
-                                            # print("Old value for BS_KEY_EXT: ")
-                                            for other_ue in ue_array:
-                                                if ue_key_int == f'UE_{other_ue.get_ue_id()}':
-                                                    # print("OLD value for BS: ")
-                                                    # print(" OLD start_tick = ", simulator_timing_structure[ue_key_ext]
-                                                    # ['DATA_RX'][ue_key_int][array_index][0])
-                                                    # print("OLD end tick = ", simulator_timing_structure[ue_key_ext]
-                                                    # ['DATA_RX'][ue_key_int][array_index][1])
+                        ###### Random change in UEs coordinates ########
+                        random.shuffle(ue_coordinates_list)
 
-                                                    prop_delay_tick = other_ue.get_prop_delay_to_bs_tick()
-                                                    # print("PROP DELAY: ", prop_delay_tick)
+                        index = 0
+                        for ue in ue_array:
+                            ue.set_coordinates(ue_coordinates_list[index][0], ue_coordinates_list[index][1],
+                                               ue_coordinates_list[index][2])
+                            copy_ue_coordinates_dict[ue.get_ue_id()].append(ue.get_coordinates().tolist())
 
-                                                    simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int][
-                                                        array_index][0] = \
-                                                        simulator_timing_structure[ue_key_ext]['DATA_RX'][
-                                                            ue_key_int][
-                                                            array_index][0] - prop_delay_tick
-                                                    simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int][
-                                                        array_index][1] = \
-                                                        simulator_timing_structure[ue_key_ext]['DATA_RX'][
-                                                            ue_key_int][
-                                                            array_index][1] - prop_delay_tick
+                            index += 1
 
-                            for ue_key_int in simulator_timing_structure[ue_key_ext]['ACK_RX'].keys():
-                                # check the value of the final_state_tick
-                                if len(simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int]) > 0:
-                                    for array_index in range(
-                                            len(simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int])):
-                                        if \
-                                                simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int][
-                                                    array_index][0] \
-                                                        != tot_simulation_time_tick + 1 and \
-                                                        simulator_timing_structure[ue_key_ext]['ACK_RX'][
-                                                            ue_key_int][
-                                                            array_index][0] != tot_simulation_time_tick + 1:
-                                            # print("Old value for BS_KEY_EXT: ")
-                                            for other_ue in ue_array:
-                                                if ue_key_int == f'UE_{other_ue.get_ue_id()}':
-                                                    # print("OLD value for BS: ")
-                                                    # print(" OLD start_tick = ", simulator_timing_structure[ue_key_ext]
-                                                    # ['ACK_RX'][ue_key_int][array_index][0])
-                                                    # print("OLD end tick = ", simulator_timing_structure[ue_key_ext]
-                                                    # ['ACK_RX'][ue_key_int][array_index][1])
+                    # re-plot the reference scenario after the movement
 
-                                                    prop_delay_tick = other_ue.get_prop_delay_to_bs_tick()
-                                                    # print("PROP DELAY: ", prop_delay_tick)
-
-                                                    simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int][
-                                                        array_index][0] = \
-                                                        simulator_timing_structure[ue_key_ext]['ACK_RX'][
-                                                            ue_key_int][
-                                                            array_index][0] - prop_delay_tick
-                                                    simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int][
-                                                        array_index][1] = \
-                                                        simulator_timing_structure[ue_key_ext]['ACK_RX'][
-                                                            ue_key_int][
-                                                            array_index][1] - prop_delay_tick
-
-                    ###### Random change in UEs coordinates ########
-                    random.shuffle(ue_coordinates_list)
-
-                    # print(ue_coordinates_list)
-                    index = 0
-                    for ue in ue_array:
-                        ue.set_coordinates(ue_coordinates_list[index][0], ue_coordinates_list[index][1],
-                                           ue_coordinates_list[index][2])
-                        copy_ue_coordinates_dict[ue.get_ue_id()].append(ue.get_coordinates().tolist())
-
-                        print("UE ", ue.get_ue_id(), " NEW Coordinates: ", ue.get_coordinates())
-
-                        index += 1
-
+                    # plot_scenario_2d(factory_length=geometry_class.get_factory_length(),
+                    #                  factory_width=geometry_class.get_factory_width(),
+                    #                  factory_height=geometry_class.get_factory_height(),
+                    #                  machine_list=machine_array,
+                    #                  ue_list=ue_array,
+                    #                  bs=bs,
+                    #                  distribution_class=distribution_class,
+                    #                  scenario_name=scenario_name,
+                    #                  save_file=f'./multi_hop_industrial_simulator/results/plot_{scenario_name}_scenario_2d.png',
+                    #                  )
                     for i in range(0, len(ue_array)):
-                        # ue_array[i].is_in_los.clear()
                         ue_array[i].is_in_los_ues.clear()
 
-                    # Set UE LoS/NLoS condition
-                    if ue_distribution_type != "Grid":
+                    # Update UE LoS/NLoS condition after the movement
 
-                        for i in range(0, len(ue_array)):
-                            ue_array[i].is_in_los = set_ues_los_condition(ue=ue_array[i], bs=bs,
-                                                                          machine_array=machine_array,
-                                                                          link='ue_bs')
-
-                        for j in range(0, len(ue_array)):
-                            for i in range(0, len(ue_array)):
-                                los_condition = set_ues_los_condition(ue=ue_array[j], bs=ue_array[i],
+                    for i in range(0, len(ue_array)):
+                        ue_array[i].is_in_los = set_ues_los_condition(ue=ue_array[i], bs=bs,
                                                                       machine_array=machine_array,
-                                                                      link='ue_ue')
-                                ue_array[j].is_in_los_ues.append(los_condition)
+                                                                      link='ue_bs')
 
-                        # Method to ensure that in case of UEs' Uniform distribution they can have at least one neighbour
-                        # to reach the BS
-
-                        check_for_neighbours(ue_array=ue_array, machine_array=machine_array, bs=bs,
-                                             input_snr_threshold_db=sinr_th_db,
-                                             input_shadowing_sample_index=0, input_thz_channel=thz_channel,
-                                             input_carrier_frequency_ghz=carrier_frequency_ghz,
-                                             input_bandwidth_hz=bandwidth_hz,
-                                             input_apply_fading=apply_fading, input_clutter_density=clutter_density,
-                                             antenna_gain_model=antenna_gain_model,
-                                             use_channel_measurements=use_channel_measurements,
-                                             input_average_clutter_height_m=average_machine_height_m)
-
-                        compute_propagation_delays(ue_array=ue_array, bs=bs,
-                                                   input_simulator_tick_duration_s=simulator_tick_duration_s)
-
-                    else:
-
+                    for j in range(0, len(ue_array)):
                         for i in range(0, len(ue_array)):
-                            ue_array[i].is_in_los = set_ues_los_condition(ue=ue_array[i], bs=bs,
-                                                                          machine_array=machine_array,
-                                                                          link='ue_bs')
+                            los_condition = set_ues_los_condition(ue=ue_array[j], bs=ue_array[i],
+                                                                  machine_array=machine_array,
+                                                                  link='ue_ue')
+                            ue_array[j].is_in_los_ues.append(los_condition)
 
-                        for j in range(0, len(ue_array)):
-                            for i in range(0, len(ue_array)):
-                                los_condition = set_ues_los_condition(ue=ue_array[j], bs=ue_array[i],
-                                                                      machine_array=machine_array,
-                                                                      link='ue_ue')
-                                ue_array[j].is_in_los_ues.append(los_condition)
+                    for ue in ue_array:
+                        tx_rx_distance_m = compute_distance_m(tx=ue, rx=bs)
+                        shadowing_sample_index = 0
+                        snr_db = thz_channel.get_3gpp_snr_db(
+                            tx=ue, rx=bs,
+                            carrier_frequency_ghz=carrier_frequency_ghz,
+                            tx_rx_distance_m=tx_rx_distance_m,
+                            apply_fading=apply_fading,
+                            bandwidth_hz=bandwidth_hz,
+                            clutter_density=clutter_density,
+                            input_shadowing_sample_index=shadowing_sample_index,
+                            antenna_gain_model=antenna_gain_model,
+                            use_channel_measurements=use_channel_measurements,
+                            input_average_clutter_height_m=average_machine_height_m,
+                            los_cond='bs_ue')
+                        if snr_db > sinr_th_db:
+                            success = True
+                        else:
+                            success = False
 
+                    for ue in ue_array:
+                        for other_ue in ue_array:
+                            if other_ue != ue:
+                                tx_rx_distance_m = compute_distance_m(tx=ue, rx=other_ue)
 
-                    if mobility_shuffle:
+                                shadowing_sample_index = 0
+                                snr_db = thz_channel.get_3gpp_snr_db(
+                                    tx=ue, rx=other_ue,
+                                    carrier_frequency_ghz=carrier_frequency_ghz,
+                                    tx_rx_distance_m=tx_rx_distance_m,
+                                    apply_fading=apply_fading,
+                                    bandwidth_hz=bandwidth_hz,
+                                    clutter_density=clutter_density,
+                                    input_shadowing_sample_index=shadowing_sample_index,
+                                    antenna_gain_model=antenna_gain_model,
+                                    use_channel_measurements=use_channel_measurements,
+                                    input_average_clutter_height_m=average_machine_height_m,
+                                    los_cond='ue_ue')
+                                if snr_db > sinr_th_db:
+                                    success = True
+                                else:
+                                    success = False
+
+                    if mobility_shuffle:  # Update propagation delays
                         compute_propagation_delays(ue_array=ue_array, bs=bs,
                                                    input_simulator_tick_duration_s=simulator_tick_duration_s)
 
@@ -1598,14 +1596,12 @@ for seed in range(initial_seed, final_seed + 1):
                                                         != tot_simulation_time_tick + 1 and \
                                                         simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int][
                                                             array_index][0] != tot_simulation_time_tick + 1:
-                                                    # print("NEW value for UE_KEY_EXT: ", f'UE_{ue.get_ue_id()}')
+
                                                     for other_ue in ue_array:
                                                         if ue_key_int == f'UE_{other_ue.get_ue_id()}':
-                                                            # print("NEW value for UE_KEY_INT: ", f'UE_{other_ue.get_ue_id()}')
 
                                                             prop_delay_tick = ue.get_prop_delay_to_ue_tick(
                                                                 other_ue.get_ue_id())
-                                                            # print("PROP DELAY: ", prop_delay_tick)
 
                                                             simulator_timing_structure[ue_key_ext]['DATA_RX'][
                                                                 ue_key_int][
@@ -1639,10 +1635,8 @@ for seed in range(initial_seed, final_seed + 1):
                                                                           ['DATA_RX'][ue_key_int][array_index][1])
 
                                                     if ue_key_int == 'BS':
-                                                        # print("NEW value for BS: ")
 
                                                         prop_delay_tick = ue.get_prop_delay_to_bs_tick()
-                                                        # print("PROP DELAY: ", prop_delay_tick)
 
                                                         simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int][
                                                             array_index][0] = \
@@ -1656,7 +1650,8 @@ for seed in range(initial_seed, final_seed + 1):
                                                                 array_index][1] + prop_delay_tick
 
                                                         if \
-                                                                simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int][
+                                                                simulator_timing_structure[ue_key_ext]['DATA_RX'][
+                                                                    ue_key_int][
                                                                     array_index][0] < next_t_change:
                                                             remove_item_in_timing_structure(
                                                                 input_simulator_timing_structure=copy_simulator_timing_structure,
@@ -1682,14 +1677,12 @@ for seed in range(initial_seed, final_seed + 1):
                                                         != tot_simulation_time_tick + 1 and \
                                                         simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int][
                                                             array_index][0] != tot_simulation_time_tick + 1:
-                                                    # print("NEW value for UE_KEY_EXT: ", f'UE_{ue.get_ue_id()}')
+
                                                     for other_ue in ue_array:
                                                         if ue_key_int == f'UE_{other_ue.get_ue_id()}':
-                                                            # print("NEW value for UE_KEY_INT: ", f'UE_{other_ue.get_ue_id()}')
 
                                                             prop_delay_tick = ue.get_prop_delay_to_ue_tick(
                                                                 other_ue.get_ue_id())
-                                                            # print("PROP DELAY: ", prop_delay_tick)
 
                                                             simulator_timing_structure[ue_key_ext]['ACK_RX'][
                                                                 ue_key_int][
@@ -1722,10 +1715,8 @@ for seed in range(initial_seed, final_seed + 1):
                                                                           ['ACK_RX'][ue_key_int][array_index][1])
 
                                                     if ue_key_int == 'BS':
-                                                        # print("NEW value for BS: ")
 
                                                         prop_delay_tick = ue.get_prop_delay_to_bs_tick()
-                                                        # print("PROP DELAY: ", prop_delay_tick)
 
                                                         simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int][
                                                             array_index][0] = \
@@ -1762,18 +1753,18 @@ for seed in range(initial_seed, final_seed + 1):
                                         for array_index in range(
                                                 len(simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int])):
                                             if \
-                                                    simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int][array_index][
+                                                    simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int][
+                                                        array_index][
                                                         0] \
                                                             != tot_simulation_time_tick + 1 and \
-                                                            simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int][
+                                                            simulator_timing_structure[ue_key_ext]['DATA_RX'][
+                                                                ue_key_int][
                                                                 array_index][0] != tot_simulation_time_tick + 1:
-                                                # print("NEW value for BS_KEY_EXT: ")
+
                                                 for other_ue in ue_array:
                                                     if ue_key_int == f'UE_{other_ue.get_ue_id()}':
-                                                        # print("NEW value for BS: ")
 
                                                         prop_delay_tick = other_ue.get_prop_delay_to_bs_tick()
-                                                        # print("PROP DELAY: ", prop_delay_tick)
 
                                                         simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int][
                                                             array_index][0] = \
@@ -1786,7 +1777,8 @@ for seed in range(initial_seed, final_seed + 1):
                                                                 ue_key_int][
                                                                 array_index][1] + prop_delay_tick
                                                         if \
-                                                                simulator_timing_structure[ue_key_ext]['DATA_RX'][ue_key_int][
+                                                                simulator_timing_structure[ue_key_ext]['DATA_RX'][
+                                                                    ue_key_int][
                                                                     array_index][0] < next_t_change:
                                                             remove_item_in_timing_structure(
                                                                 input_simulator_timing_structure=copy_simulator_timing_structure,
@@ -1808,17 +1800,17 @@ for seed in range(initial_seed, final_seed + 1):
                                         for array_index in range(
                                                 len(simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int])):
                                             if \
-                                                    simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int][array_index][0] \
+                                                    simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int][
+                                                        array_index][0] \
                                                             != tot_simulation_time_tick + 1 and \
-                                                            simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int][
+                                                            simulator_timing_structure[ue_key_ext]['ACK_RX'][
+                                                                ue_key_int][
                                                                 array_index][0] != tot_simulation_time_tick + 1:
-                                                # print("NEW value for BS_KEY_EXT: ")
+
                                                 for other_ue in ue_array:
                                                     if ue_key_int == f'UE_{other_ue.get_ue_id()}':
-                                                        # print("NEW value for BS: ")
 
                                                         prop_delay_tick = other_ue.get_prop_delay_to_bs_tick()
-                                                        # print("PROP DELAY: ", prop_delay_tick)
 
                                                         simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int][
                                                             array_index][0] = \
@@ -1850,7 +1842,7 @@ for seed in range(initial_seed, final_seed + 1):
                         simulator_timing_structure = deepcopy(copy_simulator_timing_structure)
 
                 # End Mobility
-                # The simulator is an event simulator based on tick, check the first event to process 
+
                 for ue in ue_array:
                     ue.data_rx_during_wait_ack = False
                     ue.ack_rx_during_wait_ack = False
@@ -1862,6 +1854,7 @@ for seed in range(initial_seed, final_seed + 1):
                     new_wait_ack_ue_id = None
                     remove_ack_rx_keys = False
                     remove_data_rx_keys = False
+                    # Update the simulator timing structure of each UE as soon as a new event happened
                     for ue_key_ext in simulator_timing_structure.keys():
                         if ue_key_ext == f'UE_{ue.get_ue_id()}':
                             # Loop over the DATA receptions from other UEs
@@ -1893,7 +1886,6 @@ for seed in range(initial_seed, final_seed + 1):
                             for ue_key_int in simulator_timing_structure[ue_key_ext]['ACK_RX'].keys():
                                 min_rx_tick2.append(
                                     np.min(simulator_timing_structure[ue_key_ext]['ACK_RX'][ue_key_int][:, 1]))
-
                             min1 = np.min(min_rx_tick1)
                             min2 = np.min(min_rx_tick2)
                             min_rx_tick = np.minimum(min1, min2)
@@ -1990,10 +1982,12 @@ for seed in range(initial_seed, final_seed + 1):
                     """
                     packet_generation_instant = ue.get_next_packet_generation_instant()
                     if t == packet_generation_instant:
-                        if len(ue.ul_buffer.buffer_packet_list) < ue.Q_and_W_buffer_length + 1:
+                        if len(ue.ul_buffer.buffer_packet_list) < ue.madrl_Q + 1:
                             ue.add_new_packet(current_tick=packet_generation_instant, input_enable_print=enable_print)
                             ue.packet_generation_instant = packet_generation_instant
-                            # print("UE ", ue.get_ue_id(), " packet generation: ", packet_generation_instant)
+                        else:
+                            # Buffer full → drop due to full buffer (D_Q signal)
+                            ue.madrl_dq = False
 
                     """
                         Based on the UE state, make the corresponding action and update the future state
@@ -2002,24 +1996,18 @@ for seed in range(initial_seed, final_seed + 1):
                         """
                             UEs' STATE
                         """
-                        # IDLE STATE
                         if ue.get_state() == 'IDLE':
                             # Check queue, if there is a data then go to BO, otherwise go to IDLE until next generation
                             if ue.get_n_packets() > 0:
                                 ue.update_num_tx(input_enable_print=enable_print)
                                 backoff_duration_tick = get_backoff_duration(input_ue=ue,
                                                                              input_contention_window_int=
-                                                                             ue.Q_and_W_contention_window,
+                                                                             ue.madrl_W,
                                                                              input_t_backoff_tick=t_backoff_tick,
                                                                              input_max_prop_delay_tick=max_prop_delay_tick)
                                 go_in_backoff(input_ue=ue, current_tick=t,
                                               input_backoff_duration_tick=backoff_duration_tick,
                                               input_enable_print=enable_print)
-
-                                # if enable_print:
-                                #     print("Energy for UE ", ue.get_ue_id(), " = ",
-                                #           ue.energy_consumed / simulator_tick_duration_s,
-                                #           " computed from t = ", t, " to t = ", ue.get_state_duration())
 
                             else:
                                 # Remain in IDLE
@@ -2030,11 +2018,8 @@ for seed in range(initial_seed, final_seed + 1):
                                           ue.energy_consumed / simulator_tick_duration_s,
                                           " computed from t = ", t, " to t = ", ue.get_state_duration())
 
-                        # BACKOFF STATE
                         elif ue.get_state() == 'BO':
                             go_in_tx_data_bool = False
-                            # print("UE ", ue.get_ue_id(), "Neighbours: ", ue.obs[0])
-
                             if star_topology is False:
                                 go_in_tx_data_bool = False
 
@@ -2055,19 +2040,16 @@ for seed in range(initial_seed, final_seed + 1):
                                             current_tick=t,
                                             input_ue_id=ue.get_ue_id()))
 
-                                    for index in range(
-                                            len(data_rx_at_ue_ue_id)):
+                                    for index in range(len(data_rx_at_ue_ue_id)):
                                         # Compute the tx-rx distance
                                         tx_rx_distance_m = compute_distance_m(tx=ue_array[data_rx_at_ue_ue_id[index]],
                                                                               rx=ue)
-                                        # print("DISTANZA UE ", data_rx_at_ue_ue_id, " - UE ", ue.get_ue_id(), " = ", tx_rx_distance_m)
 
                                         # Check if the shadowing sample should be changed
                                         if t >= shadowing_next_tick:
                                             shadowing_sample_index = shadowing_sample_index + 1
                                             shadowing_next_tick = t + shadowing_coherence_time_tick_duration
 
-                                        # compute the RX power
                                         data_rx_power = thz_channel.get_3gpp_prx_db(
                                             tx=ue_array[data_rx_at_ue_ue_id[index]], rx=ue,
                                             carrier_frequency_ghz=carrier_frequency_ghz,
@@ -2102,7 +2084,7 @@ for seed in range(initial_seed, final_seed + 1):
                                         # ID of the UE that has sent the data
                                         # -> need to check if there is another UE != from these two UEs that has TX a DATA or an ACK
                                         ue.ues_colliding_at_ue.clear()
-                                        # Compute the colliding UE
+
                                         ue.ues_colliding_at_ue = check_collision(
                                             input_simulator_timing_structure=simulator_timing_structure,
                                             input_ue_id=ue.get_ue_id(),
@@ -2110,6 +2092,9 @@ for seed in range(initial_seed, final_seed + 1):
                                             input_t_end_rx=data_rx_at_ue_ending_tick, input_tx=None,
                                             input_ue_id_rx=data_rx_at_ue_ue_id[index],
                                             ues_colliding=ue.ues_colliding_at_ue)
+
+                                        # capture effect -> we are in BO so the reference UE can RX
+                                        #  DATA/ACK only from other UEs
 
                                         useful_rx_power_db = data_rx_power
                                         add_interferer = True
@@ -2133,6 +2118,8 @@ for seed in range(initial_seed, final_seed + 1):
                                                             user.get_ue_id() != ue.get_ue_id() and \
                                                             user.get_ue_id() != data_rx_at_ue_ue_id[index]:
                                                         # to compute the portion of data overlapped:
+                                                        # t_j = (t_end_current - t_start_interferer) /
+                                                        # (t_end_current - t_start_current)
                                                         if ue.ues_colliding_at_ue[i][1] < data_rx_at_ue_ending_tick < \
                                                                 ue.ues_colliding_at_ue[i][2]:
                                                             t_overlap = ((data_rx_at_ue_ending_tick -
@@ -2144,10 +2131,8 @@ for seed in range(initial_seed, final_seed + 1):
                                                                           ue.ues_colliding_at_ue[i][1]) /
                                                                          (data_rx_at_ue_ending_tick -
                                                                           data_rx_at_ue_starting_tick))
-
                                                         n_interferers += 1
                                                         tx_rx_distance_m = compute_distance_m(tx=user, rx=ue)
-                                                        # Compute the interference power
                                                         interference_rx_power += t_overlap * thz_channel.get_3gpp_prx_lin(
                                                             tx=user, rx=ue,
                                                             carrier_frequency_ghz=carrier_frequency_ghz,
@@ -2160,11 +2145,12 @@ for seed in range(initial_seed, final_seed + 1):
                                                             use_channel_measurements=use_channel_measurements,
                                                             input_average_clutter_height_m=average_machine_height_m,
                                                             los_cond='ue_ue')
-                                            # Check every possible collision
                                             for i in range(len(ue.ues_colliding_at_ue)):
                                                 if 'BS' == ue.ues_colliding_at_ue[i][0] and 'BS' != data_rx_at_ue_ue_id[
                                                     index]:
                                                     # to compute the portion of data overlapped:
+                                                    # t_j = (t_end_current - t_start_interferer) /
+                                                    # (t_end_current - t_start_current)
                                                     if ue.ues_colliding_at_ue[i][1] < data_rx_at_ue_ending_tick < \
                                                             ue.ues_colliding_at_ue[i][2]:
                                                         t_overlap = ((data_rx_at_ue_ending_tick -
@@ -2176,10 +2162,8 @@ for seed in range(initial_seed, final_seed + 1):
                                                                       ue.ues_colliding_at_ue[i][1]) /
                                                                      (data_rx_at_ue_ending_tick -
                                                                       data_rx_at_ue_starting_tick))
-
                                                     n_interferers += 1
                                                     tx_rx_distance_m = compute_distance_m(tx=bs, rx=ue)
-                                                    # Compute the interference power
                                                     interference_rx_power += t_overlap * thz_channel.get_3gpp_prx_lin(
                                                         tx=bs, rx=ue,
                                                         carrier_frequency_ghz=carrier_frequency_ghz,
@@ -2192,15 +2176,14 @@ for seed in range(initial_seed, final_seed + 1):
                                                         use_channel_measurements=use_channel_measurements,
                                                         input_average_clutter_height_m=average_machine_height_m,
                                                         los_cond='bs_ue')
-                                        # Check if some UEs are interfering at the current UE
+
                                         if len(ue.ues_interfering_at_ue) > 0:
-                                            # for the intefering users (whose that before where useful user),
-                                            # I have to check if their ending tick of ACK or DATA is betwween the
+                                            # for the interfering users (whose that before where useful user),
+                                            # I have to check if their ending tick of ACK or DATA is between the
                                             # staring and the ending tick of the actual RX DATA/ACK
                                             # If Yes -> it is an interferer
                                             # If No -> remove from the list of interferers.
                                             copy_of_list = deepcopy(ue.ues_interfering_at_ue)
-                                            # Check the collision with other UEs
                                             for user in ue_array:
                                                 for i in range(len(copy_of_list)):
                                                     if user.get_ue_id() != ue.get_ue_id() and \
@@ -2220,10 +2203,9 @@ for seed in range(initial_seed, final_seed + 1):
                                                                                   copy_of_list[i][1]) /
                                                                                  (data_rx_at_ue_ending_tick -
                                                                                   data_rx_at_ue_starting_tick))
-
                                                                 n_interferers += 1
                                                                 tx_rx_distance_m = compute_distance_m(tx=user, rx=ue)
-                                                                # Compute the interference power
+
                                                                 interference_rx_power += t_overlap * thz_channel.get_3gpp_prx_lin(
                                                                     tx=user, rx=ue,
                                                                     carrier_frequency_ghz=carrier_frequency_ghz,
@@ -2236,17 +2218,17 @@ for seed in range(initial_seed, final_seed + 1):
                                                                     use_channel_measurements=use_channel_measurements,
                                                                     input_average_clutter_height_m=average_machine_height_m,
                                                                     los_cond='ue_ue')
-                                                            elif t >= copy_of_list[i][2]: 
+                                                            elif t >= copy_of_list[i][2]:
                                                                 ue.ues_interfering_at_ue.remove(
                                                                     (f'UE_{user.get_ue_id()}', copy_of_list[i][1],
                                                                      copy_of_list[i][2]))
-                                            # Check the collision with the BS
                                             for i in range(len(copy_of_list)):
                                                 if 'BS' != data_rx_at_ue_ue_id[index]:
                                                     if 'BS' == copy_of_list[i][0]:
 
                                                         if data_rx_at_ue_starting_tick < copy_of_list[i][2]:
                                                             # to compute the portion of data overlapped:
+
                                                             if data_rx_at_ue_starting_tick > copy_of_list[i][1]:
                                                                 t_overlap = ((copy_of_list[i][2] -
                                                                               data_rx_at_ue_starting_tick) /
@@ -2257,10 +2239,9 @@ for seed in range(initial_seed, final_seed + 1):
                                                                               copy_of_list[i][1]) /
                                                                              (data_rx_at_ue_ending_tick -
                                                                               data_rx_at_ue_starting_tick))
-
                                                             n_interferers += 1
                                                             tx_rx_distance_m = compute_distance_m(tx=bs, rx=ue)
-                                                            # Compute the interference power
+
                                                             interference_rx_power += t_overlap * thz_channel.get_3gpp_prx_lin(
                                                                 tx=bs, rx=ue,
                                                                 carrier_frequency_ghz=carrier_frequency_ghz,
@@ -2273,16 +2254,15 @@ for seed in range(initial_seed, final_seed + 1):
                                                                 use_channel_measurements=use_channel_measurements,
                                                                 input_average_clutter_height_m=average_machine_height_m,
                                                                 los_cond='bs_ue')
-                                                        elif t >= copy_of_list[i][2]:  # new
+                                                        elif t >= copy_of_list[i][2]:
                                                             ue.ues_interfering_at_ue.remove((copy_of_list[i][0],
                                                                                              copy_of_list[i][1],
                                                                                              copy_of_list[i][2]))
-                                        # No interferers
                                         if interference_rx_power == 0:
                                             sinr_db = snr_db
-                                        # There are some interferers
+
                                         else:
-                                            # interference_rx_power_db = 10 * np.log10(interference_rx_power)
+
                                             noise_power_dbw = thz_channel.get_thermal_noise_power_dbw(
                                                 input_noise_figure=noise_figure_ue, bandwidth_hz=bandwidth_hz)
                                             noise_power = 10 ** (noise_power_dbw / 10)
@@ -2290,52 +2270,48 @@ for seed in range(initial_seed, final_seed + 1):
                                             useful_rx_power = 10 ** (useful_rx_power_db / 10)
                                             sinr = useful_rx_power / noise_plus_interference
                                             sinr_db = 10 * log10(sinr)
-                                        # Check the SINR
+
                                         if sinr_db >= sinr_th_db:
                                             success = True
                                         else:
                                             success = False
 
                                         ue.n_interfering.append(n_interferers)
-                                        
-                                        # Check if the RX has had success and the buffer is not full
+
                                         if success and ((len(ue.ul_buffer.buffer_packet_list) < \
-                                                         ue.Q_and_W_buffer_length + 1 and ue.check_generated_packet_present() is True) \
+                                                         ue.madrl_Q + 1 and ue.check_generated_packet_present() is True) \
                                                         or (
                                                                 (len(ue.ul_buffer.buffer_packet_list) < \
-                                                                 ue.Q_and_W_buffer_length and ue.check_generated_packet_present() is False))):
+                                                                 ue.madrl_Q and ue.check_generated_packet_present() is False))):
 
-                                            # Append the packet to the forwarding packet list
                                             ue.packet_forwarding.append(packet_id_rx_from_ue[index])
 
-                                            ################################ Multi-hop Implementation ##########################
-                                            # Check if in the uplink buffer there is a packet generated by the UE itself
                                             counter = 0
                                             for packet in ue.ul_buffer.buffer_packet_list:
                                                 if packet.get_generated_by_ue() == ue.ue_id:
                                                     counter += 1
                                             if counter > 0:
-                                                total_buffer_size = ue.Q_and_W_buffer_length + 1
+                                                total_buffer_size = ue.madrl_Q + 1
                                             else:
-                                                total_buffer_size = ue.Q_and_W_buffer_length
+                                                total_buffer_size = ue.madrl_Q
 
                                             if data_rx_at_ue_size_bytes[index] > 0 and len(
                                                     ue.ul_buffer.buffer_packet_list) < \
                                                     total_buffer_size:
-                                                
+
                                                 for user in ue_array:
                                                     if data_rx_at_ue_ue_id[index] == user.get_ue_id():
-                                                        # print("UE ", ue.get_ue_id() ,"successfully received from UE: ", data_rx_at_ue_ue_id)
                                                         if len(user.buffer_packet_sent) > 0:
                                                             for packet in user.buffer_packet_sent:
                                                                 if packet.packet_id == packet_id_rx_from_ue[index]:
                                                                     # -1 -> pacch rx in broadcast
-                                                                    # oppure se ho rx pacch in unicast dall'UE che ha selezionato me come relay
+                                                                    # or if I have rx a packet in unicast from the UE
+                                                                    # that has selected that corresponding UE as relay
                                                                     if packet.address == str(
                                                                             ue.get_ue_id()) or packet.address == "-1":
                                                                         ue.designated_rx = True
                                                                         break
-                                                            # Check if the dest of the packet is this UE
+
                                                             if ue.designated_rx:
 
                                                                 # reset the action variables
@@ -2344,10 +2320,8 @@ for seed in range(initial_seed, final_seed + 1):
                                                                           " has received a packet from UE ",
                                                                           data_rx_at_ue_ue_id[index])
 
-                                                                ####################### Multi-hop Implementation ############################
-                                                                ue.designated_rx = False 
-                                                                ####################### End Multi-hop Implementation ########################
-                                                                # Check if the packet is already in the queue
+                                                                ue.designated_rx = False  # mi serve
+
                                                                 first_entry_in_loop = True
                                                                 for n_packet in range(len(user.buffer_packet_sent)):
                                                                     if packet_id_rx_from_ue[index] == \
@@ -2372,16 +2346,14 @@ for seed in range(initial_seed, final_seed + 1):
 
                                                                             # If the packet is generated by the UE itself, force a broadcast action
                                                                             if packet_generated_by_ue_itself and \
-                                                                                    ue.obs[0][
-                                                                                        -1] == 0:
+                                                                                    ue.obs[0][-1] == 0:
                                                                                 ue.next_action = 3
                                                                             # Check if the packet exceeded the hop limit
                                                                             packet_out_of_hop_limit = False
                                                                             if user.buffer_packet_sent[
                                                                                 n_packet].get_hop_count() >= hop_limit:
                                                                                 packet_out_of_hop_limit = True
-                                                                            
-                                                                            # Check if the packet has to be added to the queue
+
                                                                             if (packet_already_in_queue is False and
                                                                                     packet_generated_by_ue_itself is False
                                                                                     and packet_out_of_hop_limit is False):
@@ -2426,11 +2398,13 @@ for seed in range(initial_seed, final_seed + 1):
                                                                                                       n_packet].get_hop_count(),
                                                                                                   packet_address=(
                                                                                                       ue.get_unicast_rx_address() if ue.get_broadcast_bool() is False else "-1"),
-                                                                                                  generation_time=user.buffer_packet_sent[
+                                                                                                  generation_time=
+                                                                                                  user.buffer_packet_sent[
                                                                                                       n_packet].get_generated_by_ue_time_instant_tick())
 
                                                                                 ue.update_num_tx(
                                                                                     input_packet_id=ue.ul_buffer.get_last_packet().get_id())
+
                                                                                 ue.dict_data_rx_during_bo[
                                                                                     data_rx_at_ue_ue_id[index]].append(
                                                                                     user.buffer_packet_sent[
@@ -2447,7 +2421,7 @@ for seed in range(initial_seed, final_seed + 1):
                                                                                             n_packet].get_id())
                                                                             if (packet_already_in_queue is True and
                                                                                     packet_generated_by_ue_itself is False):
-                                                                                ue.packet_forward = True  
+                                                                                ue.packet_forward = True
                                                                                 ue.dict_data_rx_during_bo[
                                                                                     data_rx_at_ue_ue_id[index]].append(
                                                                                     user.buffer_packet_sent[
@@ -2469,7 +2443,7 @@ for seed in range(initial_seed, final_seed + 1):
                                                                                             n_packet].get_id())
 
                                                                 if ue.forward_in_bo:
-                                                                    # this is the code for waiting until the end of BO
+
                                                                     ue.forward_in_bo = False
 
                                                                     if data_rx_at_ue_ue_id[
@@ -2477,9 +2451,7 @@ for seed in range(initial_seed, final_seed + 1):
                                                                         ue.data_rx_at_ue_ue_id_list.append(
                                                                             data_rx_at_ue_ue_id[index])
 
-                                                                    # Update the neighbors info if the neighbor table is not empty
-                                                                    if np.sum(
-                                                                            ue.obs[1]) > 0:  # vedo se ho almeno un ACK
+                                                                    if np.sum(ue.obs[1]) > 0:
                                                                         if ue.get_ue_id() < data_rx_at_ue_ue_id[index]:
                                                                             ue.set_obs_update(
                                                                                 input_data_rx_at_ue_tx_index=
@@ -2491,38 +2463,22 @@ for seed in range(initial_seed, final_seed + 1):
                                                                                 input_data_rx_at_ue_tx_index=
                                                                                 data_rx_at_ue_ue_id[index],
                                                                                 input_rx_power=data_rx_power)
-                                                                    ########################## End Prova ###########################
-                                                                # If this UE is not forwarding nothing remain in this state
+
                                                                 else:
                                                                     ue.set_state_duration(
                                                                         input_ticks=ue.get_state_final_tick())
-                                                            # if this UE is not a designated RX remain in this state
                                                             else:
                                                                 ue.set_state_duration(
                                                                     input_ticks=ue.get_state_final_tick())
 
-                                                            ################################ End RL Implementation #################################
-
-                                                    ################################ End Multi-hop Implementation ######################
-                                                    # if this UE is not a designated RX remain in this state
                                                     else:
                                                         # Remain in BO until the end
                                                         ue.set_state_duration(input_ticks=ue.get_state_final_tick())
-                                            # if the size of the of the data RX is 0 or the buffer is full
                                             else:
                                                 # Remain in BO until the end
                                                 ue.set_state_duration(input_ticks=ue.get_state_final_tick())
-                                        # the packet has no success or the buffer is full
                                         else:
-                                            # Check if the packet has success but the buffer is full to update the metrics
-                                            if success and ((len(ue.ul_buffer.buffer_packet_list) == \
-                                                             ue.Q_and_W_buffer_length + 1 and ue.check_generated_packet_present() is True) \
-                                                            or (
-                                                                    (len(ue.ul_buffer.buffer_packet_list) == \
-                                                                     ue.Q_and_W_buffer_length and ue.check_generated_packet_present() is False))):
-                                                ue.packets_discarded_full_queue += 1
-                                                ue.W_not_added_pcks_per_step_counter += 1
-                                                ue.Q_not_added_pcks_per_step_counter += 1
+
                                             # Remain in BO until the end
                                             ue.set_state_duration(input_ticks=ue.get_state_final_tick())
                                         if len(simulator_timing_structure[f'UE_{ue.get_ue_id()}']['DATA_RX'][
@@ -2534,18 +2490,17 @@ for seed in range(initial_seed, final_seed + 1):
                                                 input_type_key='DATA_RX',
                                                 input_tx_key=f'UE_{data_rx_at_ue_ue_id[index]}')
 
-                            # Code for the star topology
                             else:
                                 if ue.get_state_duration() == ue.get_state_final_tick():
                                     go_in_tx_data_bool = True
                                 else:
                                     # Remain in BO until the end
                                     ue.set_state_duration(input_ticks=ue.get_state_final_tick())
-                            # Check if the UE has received something during the BO and it is forwarding it
+                            # If the UE has received during BO packets from other UEs to be forwarded, at the end of BO
+                            # has to go in ACK TX for that UEs
                             if ue.packet_forward:
-                                # Move to the next state if the tick is the final tick
                                 if t == ue.get_state_final_tick():
-                                    # Go in TX_ACK
+
                                     go_in_tx_ack(input_ue=ue,
                                                  input_ack_duration_tick=len(ue.data_rx_at_ue_ue_id_list) * t_ack_tick,
                                                  current_tick=t,
@@ -2556,7 +2511,7 @@ for seed in range(initial_seed, final_seed + 1):
                                     for ue_id in ue.data_rx_at_ue_ue_id_list:
 
                                         j += 1
-
+                                        # Update the timing structure for each UE
                                         for index in range(len(ue.dict_data_rx_during_bo[ue_id])):
                                             for other_ue in ue_array:
                                                 if other_ue != ue:
@@ -2597,11 +2552,9 @@ for seed in range(initial_seed, final_seed + 1):
                                     ue.previous_state = 'BO'
                                     ue.packet_forward = False
 
-                                # Remain in BO until the end of the state
                                 else:
                                     # Remain in BO until the end
                                     ue.set_state_duration(input_ticks=ue.get_state_final_tick())
-                            # The UE has not RX nothing during BO, move to TX_DATA
                             elif go_in_tx_data_bool and ue.forward_in_bo is False:
                                 # if the UE after BO has not RX anything, it has to transmit all the packets it has in the queue
                                 tx_data_size_bytes = go_in_tx_data(input_ue=ue, current_tick=t,
@@ -2611,7 +2564,6 @@ for seed in range(initial_seed, final_seed + 1):
                                     ue.ues_interfering_at_ue.clear()
                                 ue.check_last_round = True
                                 ue.update_n_data_tx(input_enable_print=enable_print)
-                                # Check if the network topology is mesh
                                 if star_topology is False:
                                     packet_id_to_be_sent = -1
                                     for packet in ue.ul_buffer.buffer_packet_list:
@@ -2619,12 +2571,12 @@ for seed in range(initial_seed, final_seed + 1):
                                                 packet.get_data_to_be_forwarded_bool() is False:
                                             packet_id_to_be_sent = packet.get_id()
 
-                                    if packet_id_to_be_sent != -1:  # I think this check is useless for full-queue.
-                                        # Maybe a problem with other types of traffic
-                                        choose_next_action_tb_no_RL(input_ue=ue, input_enable_print=enable_print)
+                                    if packet_id_to_be_sent != -1:
+                                        choose_unicast_madrl(input_ue=ue, input_enable_print=enable_print)
 
                                         starting_tick = t
                                         # Update the timing structure for UEs
+                                        # fourth field is the ID of the packet received from a UE
                                         for packet in ue.ul_buffer.buffer_packet_list:
                                             t_data_ns = round(
                                                 (packet.packet_size * 8 * 1e-9) / bs.get_bit_rate_gbits(),
@@ -2648,9 +2600,7 @@ for seed in range(initial_seed, final_seed + 1):
 
                                     starting_tick = t
                                     for packet in ue.ul_buffer.buffer_packet_list:
-                                        t_data_ns = round(
-                                            (packet.packet_size * 8 * 1e-9) / bs.get_bit_rate_gbits(),
-                                            11)  # 1.6 ns
+                                        t_data_ns = round((packet.packet_size * 8 * 1e-9) / bs.get_bit_rate_gbits(), 11)
                                         t_data_tick = round(t_data_ns / simulator_tick_duration_s)
                                         insert_item_in_timing_structure(
                                             input_simulator_timing_structure=simulator_timing_structure,
@@ -2663,13 +2613,10 @@ for seed in range(initial_seed, final_seed + 1):
                                             input_type_key='DATA_RX',
                                             input_tx_key=f'UE_{ue.get_ue_id()}')
                                         starting_tick += t_data_tick
-                                # Check if the network topology is star
                                 else:
                                     starting_tick = t
                                     for packet in ue.ul_buffer.buffer_packet_list:
-                                        t_data_ns = round(
-                                            (packet.packet_size * 8 * 1e-9) / bs.get_bit_rate_gbits(),
-                                            11)  # 1.6 ns
+                                        t_data_ns = round((packet.packet_size * 8 * 1e-9) / bs.get_bit_rate_gbits(), 11)
                                         t_data_tick = round(t_data_ns / simulator_tick_duration_s)
                                         # Update the timing dictionary with the RX instants at the BS
                                         insert_item_in_timing_structure(
@@ -2684,7 +2631,6 @@ for seed in range(initial_seed, final_seed + 1):
                                             input_tx_key=f'UE_{ue.get_ue_id()}')
                                         starting_tick += t_data_tick
 
-                        # TX_ACK STATE
                         elif ue.get_state() == 'TX_ACK':
                             # After ACK transmission go in TX_DATA
                             ue.list_data_rx_during_wait_ack.clear()
@@ -2696,17 +2642,17 @@ for seed in range(initial_seed, final_seed + 1):
                             for other_ue in ue.dict_data_rx_during_bo:
                                 ue.dict_data_rx_during_bo[other_ue].clear()
 
-                            # Check the previous state of the simulator
+                            # If the UE before was in WAIT ACK, then it has to go back to BO to try another DATA transmission
+
                             if ue.previous_state == 'WAIT_ACK':
 
-                                ############################  Multi-hop implementation ################################
                                 if ue.check_generated_packet_present() is False:
                                     ue.new_action_bool = True
-                                ################################## End Multi-hop Implementation #############################
+
                                 # Go in BO to avoid synchronism with other UEs when there are collisions and no ACKs are received
                                 backoff_duration_tick = get_backoff_duration(input_ue=ue,
                                                                              input_contention_window_int=
-                                                                             ue.Q_and_W_contention_window,
+                                                                             ue.madrl_W,
                                                                              input_t_backoff_tick=t_backoff_tick,
                                                                              input_max_prop_delay_tick=
                                                                              max_prop_delay_tick)
@@ -2714,26 +2660,23 @@ for seed in range(initial_seed, final_seed + 1):
                                               input_backoff_duration_tick=backoff_duration_tick,
                                               input_enable_print=enable_print)
 
-                                ################################## RL Implementation ########################################
                                 ue.first_bo_entry = True
-                                ################################## End RL Implementation ######################################
 
-                            # Check the previous state of the simulator
+                            # If the UE before was in BO, then it has to go in DATA TX and select the proper next hop
                             elif ue.previous_state == 'BO':
-                                # Move to TX_DATA
                                 ue.check_last_round = True
                                 tx_data_size_bytes = go_in_tx_data(input_ue=ue, current_tick=t,
                                                                    input_enable_print=enable_print)
                                 ue.update_n_data_tx(input_enable_print=enable_print)
 
-                                choose_next_action_tb_no_RL(input_ue=ue, input_enable_print=enable_print)
+                                # Select the proper action: always unicast in MADRL-TB
+
+                                choose_unicast_madrl(input_ue=ue, input_enable_print=enable_print)
 
                                 starting_tick = t
                                 # Update the timing structure for UEs
                                 for packet in ue.ul_buffer.buffer_packet_list:
-                                    t_data_ns = round(
-                                        (packet.packet_size * 8 * 1e-9) / bs.get_bit_rate_gbits(),
-                                        11)  # 1.6 ns
+                                    t_data_ns = round((packet.packet_size * 8 * 1e-9) / bs.get_bit_rate_gbits(), 11)
                                     t_data_tick = round(t_data_ns / simulator_tick_duration_s)
                                     for other_ue in ue_array:
                                         if other_ue != ue:
@@ -2753,9 +2696,7 @@ for seed in range(initial_seed, final_seed + 1):
 
                                 starting_tick = t
                                 for packet in ue.ul_buffer.buffer_packet_list:
-                                    t_data_ns = round(
-                                        (packet.packet_size * 8 * 1e-9) / bs.get_bit_rate_gbits(),
-                                        11)  # 1.6 ns
+                                    t_data_ns = round((packet.packet_size * 8 * 1e-9) / bs.get_bit_rate_gbits(), 11)
                                     t_data_tick = round(t_data_ns / simulator_tick_duration_s)
                                     # Update the timing structure for the BS
                                     insert_item_in_timing_structure(
@@ -2770,7 +2711,6 @@ for seed in range(initial_seed, final_seed + 1):
                                         input_tx_key=f'UE_{ue.get_ue_id()}')
                                     starting_tick += t_data_tick
 
-                        # TX_DATA STATE
                         elif ue.get_state() == 'TX_DATA':
                             # Go in WAIT_ACK and update the state duration
                             wait_ack_duration_tick = t_ack_tick + 2 * max_prop_delay_tick
@@ -2779,15 +2719,7 @@ for seed in range(initial_seed, final_seed + 1):
                                            input_enable_print=enable_print)
 
                             ue.first_entry = True
-                            # Increase the tx_data counter
-                            ue.Q_and_W_tx_data_counter += 1
-                            # Append the number of packets transmitted in the current round
-                            packets_number_to_send = 0
-                            for packet in ue.ul_buffer.buffer_packet_list:
-                                packets_number_to_send += 1
-                            ue.Q_buffer_utilization.append(packets_number_to_send)
 
-                        # WAIT_ACK STATE
                         elif ue.get_state() == 'WAIT_ACK':
                             remain_in_wait_ack = False  # True if the UE has to remain in WAIT_ACK
                             go_in_bo_bool = False  # True if the UE has to go to BO
@@ -2803,14 +2735,16 @@ for seed in range(initial_seed, final_seed + 1):
                             if (ue.get_state_duration() == ue.get_state_final_tick() and
                                     ue.get_reception_during_wait_bool() is False):
                                 # The WAIT_ACK state is finished without receiving an ACK
-                                # Update the number of transmission attempts and remove all packets that have reached their
-                                # maximum number of transmission attempts
+                                # Update the number of transmission attempts and remove all packets that have reached
+                                # their maximum number of transmission attempts
                                 if enable_print:
                                     print("UE ", ue.get_ue_id(), " has not received an ACK or a DATA during WAIT_ACK.")
                                 ue.set_retransmission_packets(retransmission_bool=True)
 
-                            # Something received during WAIT_ACK
                             else:
+                                # with BUFFER implementation a UE can receive an ACK for more than one
+                                #  packet of the buffer -> in the simulator structure there are more than one fields
+                                #  with the same starting and ending ticks but different packet IDs
                                 # the UE can have received a DATA or an ACK during WAIT ACK
                                 if ue.ack_rx_during_wait_ack is True:
                                     ue.ack_rx_during_wait_ack = False
@@ -2830,8 +2764,7 @@ for seed in range(initial_seed, final_seed + 1):
                                         input_ue_id=ue.get_ue_id()))
                                     ue.ack_rx_with_success = False
 
-                                    for index in range(
-                                            len(ack_rx_sources)):
+                                    for index in range(len(ack_rx_sources)):
 
                                         sorg_ack = ack_rx_sources[index]
                                         dest_ack = ack_rx_dest[index]
@@ -2839,7 +2772,7 @@ for seed in range(initial_seed, final_seed + 1):
                                         if sorg_ack is None:
                                             print("current tick: ", t)
 
-                                        # Understand who is the transmitter
+                                        # Understand who is the transmitter: UE ID or BS
                                         if star_topology is False:
                                             if sorg_ack.startswith('UE'):
                                                 tx = ue_array[int(sorg_ack[3:])]
@@ -2853,16 +2786,12 @@ for seed in range(initial_seed, final_seed + 1):
 
                                         # Compute the tx-rx distance
                                         tx_rx_distance_m = compute_distance_m(tx=tx, rx=ue)
-                                        # if tx == bs:
-                                        #     print("DISTANCE BS - UE ", ue.get_ue_id(), " = ", tx_rx_distance_m)
-                                        # else:
-                                        #     print("DISTANCE UE ", tx.get_ue_id(), " - UE ", ue.get_ue_id(), " = ", tx_rx_distance_m)
+
                                         # Check if the shadowing sample should be changed
                                         if t >= shadowing_next_tick:
                                             shadowing_sample_index = shadowing_sample_index + 1
                                             shadowing_next_tick = t + shadowing_coherence_time_tick_duration
 
-                                        # Compute the ack RX power
                                         ack_rx_power = thz_channel.get_3gpp_prx_db(
                                             tx=tx, rx=ue,
                                             carrier_frequency_ghz=carrier_frequency_ghz,
@@ -2893,12 +2822,12 @@ for seed in range(initial_seed, final_seed + 1):
                                         sir_dB = None
                                         n_interferers = 0
 
-                                        # this method takes in input both the current UE_ID that has received a data and both the
-                                        # ID of the UE that has sent the data
-                                        # -> need to check if there is another UE != from these two UEs that has TX a DATA or an ACK
+                                        # this method takes in input both the current UE_ID that has received a data
+                                        # and both the ID of the UE that has sent the data
+                                        # -> need to check if there is another UE != from these two UEs that has TX a
+                                        # DATA or an ACK
                                         ue.ues_colliding_at_ue.clear()
 
-                                        # Compute the colliding UE at RX
                                         ue.ues_colliding_at_ue = check_collision(
                                             input_simulator_timing_structure=simulator_timing_structure,
                                             input_ue_id=ue.get_ue_id(),
@@ -2909,7 +2838,6 @@ for seed in range(initial_seed, final_seed + 1):
 
                                         useful_rx_power_db = ack_rx_power
                                         add_interferer = True
-                                        # Check if there are some interferers
                                         if len(ue.ues_interfering_at_ue) > 0:
                                             for i in range(len(ue.ues_interfering_at_ue)):
                                                 if sorg_ack == \
@@ -2922,7 +2850,6 @@ for seed in range(initial_seed, final_seed + 1):
                                             ue.ues_interfering_at_ue.append((sorg_ack, ack_rx_at_ue_starting_tick,
                                                                              ack_rx_at_ue_ending_tick))
                                         interference_rx_power = 0
-                                        # Check if there are some collisions
                                         if len(ue.ues_colliding_at_ue) > 0:
                                             for user in ue_array:
                                                 for i in range(len(ue.ues_colliding_at_ue)):
@@ -2930,6 +2857,8 @@ for seed in range(initial_seed, final_seed + 1):
                                                             user.get_ue_id() != ue.get_ue_id() and \
                                                             f'UE_{user.get_ue_id()}' != sorg_ack:
                                                         # to compute the portion of data overlapped:
+                                                        # t_j = (t_end_current - t_start_interferer) /
+                                                        # (t_end_current - t_start_current)
                                                         if ue.ues_colliding_at_ue[i][1] < ack_rx_at_ue_ending_tick < \
                                                                 ue.ues_colliding_at_ue[i][2]:
                                                             t_overlap = ((ack_rx_at_ue_ending_tick -
@@ -2941,10 +2870,8 @@ for seed in range(initial_seed, final_seed + 1):
                                                                           ue.ues_colliding_at_ue[i][1]) /
                                                                          (ack_rx_at_ue_ending_tick -
                                                                           ack_rx_at_ue_starting_tick))
-
                                                         n_interferers += 1
                                                         tx_rx_distance_m = compute_distance_m(tx=user, rx=ue)
-                                                        # Compute the interference power
                                                         interference_rx_power += t_overlap * thz_channel.get_3gpp_prx_lin(
                                                             tx=user, rx=ue,
                                                             carrier_frequency_ghz=carrier_frequency_ghz,
@@ -2957,11 +2884,12 @@ for seed in range(initial_seed, final_seed + 1):
                                                             use_channel_measurements=use_channel_measurements,
                                                             input_average_clutter_height_m=average_machine_height_m,
                                                             los_cond='ue_ue')
-                                            # Check every possible collision
                                             for i in range(len(ue.ues_colliding_at_ue)):
                                                 if 'BS' == ue.ues_colliding_at_ue[i][0]:
                                                     if 'BS' != sorg_ack:
                                                         # to compute the portion of data overlapped:
+                                                        # t_j = (t_end_current - t_start_interferer) /
+                                                        # (t_end_current - t_start_current)
                                                         if ue.ues_colliding_at_ue[i][1] < ack_rx_at_ue_ending_tick < \
                                                                 ue.ues_colliding_at_ue[i][2]:
                                                             t_overlap = ((ack_rx_at_ue_ending_tick -
@@ -2975,7 +2903,6 @@ for seed in range(initial_seed, final_seed + 1):
                                                                           ack_rx_at_ue_starting_tick))
                                                         n_interferers += 1
                                                         tx_rx_distance_m = compute_distance_m(tx=bs, rx=ue)
-                                                        # Compute the interference power
                                                         interference_rx_power += t_overlap * thz_channel.get_3gpp_prx_lin(
                                                             tx=bs, rx=ue,
                                                             carrier_frequency_ghz=carrier_frequency_ghz,
@@ -2989,15 +2916,13 @@ for seed in range(initial_seed, final_seed + 1):
                                                             input_average_clutter_height_m=average_machine_height_m,
                                                             los_cond='bs_ue')
 
-                                        # Check the interferers
                                         if len(ue.ues_interfering_at_ue) > 0:
-                                            # for the intefering users (whose that before where useful user),
-                                            # I have to check if their ending tick of ACK or DATA is betwween the
+                                            # for the interfering users (whose that before where useful user),
+                                            # I have to check if their ending tick of ACK or DATA is between the
                                             # staring and the ending tick of the actual RX DATA/ACK
                                             # If Yes -> it is an interferer
                                             # If No -> remove from the list of interferers.
                                             copy_of_list = deepcopy(ue.ues_interfering_at_ue)
-                                            # Check every possible interferer between the other UEs
                                             for user in ue_array:
                                                 for i in range(len(copy_of_list)):
                                                     if user.get_ue_id() != ue.get_ue_id() and \
@@ -3016,10 +2941,8 @@ for seed in range(initial_seed, final_seed + 1):
                                                                                   copy_of_list[i][1]) /
                                                                                  (ack_rx_at_ue_ending_tick -
                                                                                   ack_rx_at_ue_starting_tick))
-
                                                                 n_interferers += 1
                                                                 tx_rx_distance_m = compute_distance_m(tx=user, rx=ue)
-                                                                # Compute the interference power
                                                                 interference_rx_power += t_overlap * thz_channel.get_3gpp_prx_lin(
                                                                     tx=user, rx=ue,
                                                                     carrier_frequency_ghz=carrier_frequency_ghz,
@@ -3032,11 +2955,10 @@ for seed in range(initial_seed, final_seed + 1):
                                                                     use_channel_measurements=use_channel_measurements,
                                                                     input_average_clutter_height_m=average_machine_height_m,
                                                                     los_cond='ue_ue')
-                                                            elif t >= copy_of_list[i][2]:  # new
+                                                            elif t >= copy_of_list[i][2]:
                                                                 ue.ues_interfering_at_ue.remove(
                                                                     (f'UE_{user.get_ue_id()}', copy_of_list[i][1],
                                                                      copy_of_list[i][2]))
-                                            # Check the BS as inteferer
                                             for i in range(len(copy_of_list)):
                                                 if 'BS' != sorg_ack:
                                                     if 'BS' == copy_of_list[i][0] and \
@@ -3054,10 +2976,8 @@ for seed in range(initial_seed, final_seed + 1):
                                                                           copy_of_list[i][1]) /
                                                                          (ack_rx_at_ue_ending_tick -
                                                                           ack_rx_at_ue_starting_tick))
-
                                                         n_interferers += 1
                                                         tx_rx_distance_m = compute_distance_m(tx=bs, rx=ue)
-                                                        # Compute the interference power
                                                         interference_rx_power += t_overlap * thz_channel.get_3gpp_prx_lin(
                                                             tx=bs, rx=ue,
                                                             carrier_frequency_ghz=carrier_frequency_ghz,
@@ -3074,10 +2994,9 @@ for seed in range(initial_seed, final_seed + 1):
                                                             t >= copy_of_list[i][2]:
                                                         ue.ues_interfering_at_ue.remove((f'BS', copy_of_list[i][1],
                                                                                          copy_of_list[i][2]))
-                                        # No interference RX power
                                         if interference_rx_power == 0:
                                             sinr_db = snr_db
-                                        # Compute the SINR with interfers
+
                                         else:
                                             noise_power_dbw = thz_channel.get_thermal_noise_power_dbw(
                                                 input_noise_figure=noise_figure_ue, bandwidth_hz=bandwidth_hz)
@@ -3094,12 +3013,9 @@ for seed in range(initial_seed, final_seed + 1):
 
                                         ue.n_interfering.append(n_interferers)
 
-                                        # Check if the ACK is received with success
                                         if success and ack_rx_dest[index] == ue.get_ue_id():
                                             # An ACK intended for this UE has been successfully received,
                                             # so discard the corresponding data
-                                            # print("ACK RX at t = ", t)
-                                            # print("WAIT_ACK should end at t = ", ue.get_state_duration())
 
                                             ue.ack_rx_with_success = True
 
@@ -3110,23 +3026,27 @@ for seed in range(initial_seed, final_seed + 1):
                                                     print("ACK transmitter = ", tx.get_ue_id())
                                                 else:
                                                     print("ACK transmitter = BS")
+                                            # when there was a BURST transmission, the UE can receive an ACK
+                                            #  for multiple packet IDs. Need to check based on n_ack_rx_simultaneously.
                                             ack_received = False
                                             indeces_to_be_removed = list()
-                                            # Look for the packet(s) in the uplink buffer for the RX ack
                                             for packet in range(len(ue.ul_buffer.buffer_packet_list)):
                                                 if ue.ul_buffer.buffer_packet_list[packet].get_id() == ack_rx_id[index]:
                                                     for i in ue.packets_to_be_removed:
                                                         if ue.ul_buffer.buffer_packet_list[packet].get_id() in \
                                                                 ue.packets_to_be_removed[i]:
                                                             ack_received = True
-                                                    # the ACK TX is the BS
+
                                                     if tx == bs:
-                                                        # Check if the last transmission was a broadcast
-                                                        if ue.get_broadcast_bool() is True:  # mi serve
+                                                        if ue.get_broadcast_bool() is True:
                                                             ue.set_temp_obs_broadcast(input_ack_rx_at_ue_tx_index=-1,
                                                                                       input_rx_power=ack_rx_power)
 
-                                                        elif ue.get_last_action() == 0:  # last transmission was unicast
+                                                        elif ue.get_last_action() == 0:
+                                                            # if the action is unicast towards BS ->
+                                                            # take RX_address saved during TX and compare with the ID
+                                                            # of the ACK sender
+
                                                             if (ue.get_unicast_rx_address() == sorg_ack[3:] or
                                                                     ue.get_unicast_rx_address() ==
                                                                     sorg_ack):
@@ -3135,17 +3055,16 @@ for seed in range(initial_seed, final_seed + 1):
                                                                     print("UE ", ue.get_ue_id(),
                                                                           " has transmitted in unicast with"
                                                                           " success to ", ue.unicast_rx_address)
-                                                                # Update the neighbor table
+
                                                                 ue.update_neighbor_table_unicast_success(
                                                                     input_rx_power=ack_rx_power)
 
-                                                    # The ACK TX is an UE
                                                     else:
+
                                                         ack_tx_bs_seen = \
                                                             ue_array[int(sorg_ack[3:])].obs[0][-1]
-                                                        # Check if the last transmission was a broadcast
                                                         if ue.get_broadcast_bool() is True:
-                                                            # Look for the TX UE
+
                                                             ue.set_temp_obs_broadcast(
                                                                 input_ack_rx_at_ue_tx_index=ue.neighbour_table.index(
                                                                     sorg_ack[3:]),
@@ -3157,7 +3076,6 @@ for seed in range(initial_seed, final_seed + 1):
                                                                       " has transmitted in broadcast and it has received an ACK from",
                                                                       sorg_ack[3:])
 
-                                                        # The last transmission was an unicast
                                                         elif ue.get_last_action() == 0:
                                                             if (ue.get_unicast_rx_address() == sorg_ack[3:] or
                                                                     ue.get_unicast_rx_address() ==
@@ -3166,7 +3084,7 @@ for seed in range(initial_seed, final_seed + 1):
                                                                     print("UE ", ue.get_ue_id(),
                                                                           " has transmitted in unicast with"
                                                                           " success to ", ue.unicast_rx_address)
-                                                                # Update the neighbor table
+
                                                                 ue.update_neighbor_table_unicast_success(
                                                                     input_rx_power=ack_rx_power,
                                                                     input_bs_seen=ack_tx_bs_seen)
@@ -3174,11 +3092,15 @@ for seed in range(initial_seed, final_seed + 1):
                                             # if the ACK for that packet has not been received yet:
                                             if ack_received is False:
                                                 ue.reception_ack_during_wait = True
-                                                # Before removing the packet, check if the ID of the packet successfully transmitted is
-                                                # different with respect to the ID contained in the previously received ACK
+                                                # ── MADRL: count this successful DATA TX ──
+                                                ue.madrl_nt += 1
+                                                ue.madrl_step_cnt += 1
+
+                                                # Before removing the packet, check if the ID of the packet successfully
+                                                # transmitted is different with respect to the ID contained in the
+                                                # previously received ACK
                                                 # If the UE is a relay, it has to remove all the packets in the queue
 
-                                                # The TX is the BS
                                                 if tx == bs:
                                                     # Compute the latency for the star topology
                                                     if star_topology is True:
@@ -3187,40 +3109,32 @@ for seed in range(initial_seed, final_seed + 1):
                                                         ue.latency_ue.append(latency)
 
                                                     for packet in range(len(ue.ul_buffer.buffer_packet_list)):
-
                                                         if ue.ul_buffer.buffer_packet_list[packet].packet_id == \
                                                                 ack_rx_id[index]:
                                                             ue.ul_buffer.buffer_packet_list[packet].set_ack_rx(
                                                                 ack_rx=True)
-                                                            latency = (t - ue.packet_generation_instant) * \
-                                                                      simulator_tick_duration_s
-                                                            ue.Q_and_W_latencies.append(latency)
 
                                                     packet_to_be_removed = deepcopy(ue.ul_buffer.buffer_packet_list)
 
-                                                    # Check every packet to be removed from the buffer
                                                     for packet in packet_to_be_removed:
                                                         if packet.packet_id == ack_rx_id[index]:
                                                             if packet.get_id() not in ue.list_data_generated_during_wait_ack \
                                                                     and packet.get_id() in ue.list_ack_sent_from_bs:
+
                                                                 if ue.get_broadcast_bool() is False:
                                                                     ue.packet_id_success = packet.get_id()
                                                                     ue.remove_packet(packet_id=packet.get_id(),
                                                                                      input_enable_print=enable_print)
                                                                     ue.packets_sent -= 1
-                                                                    # Increase the counter for the running step
-                                                                    ue.Q_and_W_acks_rx_per_step_counter += 1
                                                                 else:
                                                                     ue.packets_to_be_removed["BS"].append(
                                                                         packet.get_id())
 
                                                                 ue.list_ack_sent_from_bs.remove(packet.get_id())
 
-                                                    ################################### End Multi-hop Implementation ##################################
-                                                    # Reset the realy bool
                                                     ue.set_relay_bool(relay_bool=False)
-                                                # The TX is an UE
                                                 else:
+
                                                     for packet in range(len(ue.ul_buffer.buffer_packet_list)):
 
                                                         if ue.ul_buffer.buffer_packet_list[
@@ -3229,50 +3143,43 @@ for seed in range(initial_seed, final_seed + 1):
                                                                     ack_rx_id[index]:
                                                                 ue.ul_buffer.buffer_packet_list[packet].set_ack_rx(
                                                                     ack_rx=True)
-                                                                latency = (t - ue.packet_generation_instant) * \
-                                                                          simulator_tick_duration_s
-                                                                ue.Q_and_W_latencies.append(latency)
+
                                                     packet_to_be_removed = deepcopy(ue.ul_buffer.buffer_packet_list)
 
-                                                    ############################## Multi-hop Implementation ##############################
-                                                    # Check every packet to be removed
                                                     for packet in packet_to_be_removed:
                                                         if packet.packet_id == ack_rx_id[index]:
                                                             if packet.get_data_unicast() is False and packet.get_id() not \
                                                                     in ue.list_data_generated_during_wait_ack and \
                                                                     packet.get_id() in tx.dict_ack_sent_from_ue[
                                                                 ue.get_ue_id()]:
-                                                                # The last transmission was unicast
+
                                                                 if ue.get_broadcast_bool() is False:
                                                                     ue.packet_id_success = packet.get_id()
                                                                     ue.remove_packet(packet_id=packet.get_id(),
                                                                                      input_enable_print=enable_print)
                                                                     ue.packets_sent -= 1
-                                                                    # Increase the counter for the running step
-                                                                    ue.Q_and_W_acks_rx_per_step_counter += 1
-                                                                # The last transmission is broadcast
+
                                                                 else:
                                                                     ue.packets_to_be_removed[
                                                                         str(tx.get_ue_id())].append(
                                                                         packet.get_id())
-                                                                # Update the ack sent from the UE
+                                                                # # Reset the bool variable for being a relay to false once the ACK
+                                                                # has been sent
                                                                 tx.dict_ack_sent_from_ue[ue.get_ue_id()].remove(
                                                                     packet.get_id())
 
-                                                    ##################################### End Multi-hop Implementation ##################################
-
-                                                # Check if the uplink buffer is not empty and some data has been RX during WAIT_ACK
                                                 if len(ue.ul_buffer.buffer_packet_list) > 0 and len(
                                                         ue.list_data_rx_during_wait_ack) == 0:
                                                     remain_in_wait_ack = True
-                                            # The ACK has been already RX
+
                                             else:
                                                 if ue.get_state_duration() != ue.get_state_final_tick():
                                                     # Reception is successful, but the UE has already received that ACK
                                                     remain_in_wait_ack = True
                                                 else:
                                                     remain_in_wait_ack = False
-                                        # No success or this UE is not the designated RX of the ACK
+
+
                                         else:
                                             if ue.get_state_duration() != ue.get_state_final_tick():
                                                 # Reception is successful, but the UE has already received that ACK
@@ -3282,15 +3189,11 @@ for seed in range(initial_seed, final_seed + 1):
                                                 # The UE has not received an ACK because of PHY or MAC problems
                                                 ue.set_retransmission_packets(retransmission_bool=True)
 
-                                    # ACK RX successfully and the last transmission was unicast
                                     if ue.ack_rx_with_success is True and ue.get_last_action() == 0:
                                         ue.unicast_handling_no_reward_no_neighbor_update()
-                                        # ue.new_action_bool = True
                                         remain_in_wait_ack = False
 
-                                    # Check all the ACK RX
-                                    for index in range(
-                                            len(ack_rx_sources)):
+                                    for index in range(len(ack_rx_sources)):
                                         if len(simulator_timing_structure[f'UE_{ue.get_ue_id()}']['ACK_RX'][
                                                    ack_rx_sources[index]]) > 1:
                                             remove_item_in_timing_structure(
@@ -3301,7 +3204,6 @@ for seed in range(initial_seed, final_seed + 1):
 
                                     ack_rx_id.clear()
 
-                                # Check if DATA have been RX during WAIT_ACK and the topology of the network is mesh
                                 if ue.data_rx_during_wait_ack is True and star_topology is False:
                                     ue.data_rx_during_wait_ack = False
                                     (data_rx_at_ue_starting_tick, data_rx_at_ue_ending_tick, data_rx_at_ue_size_bytes,
@@ -3311,18 +3213,16 @@ for seed in range(initial_seed, final_seed + 1):
                                             current_tick=t,
                                             input_ue_id=ue.get_ue_id()))
 
-                                    # Check every RX DATA
-                                    for index in range(
-                                            len(data_rx_at_ue_ue_id)):
+                                    for index in range(len(data_rx_at_ue_ue_id)):
                                         # Compute the tx-rx distance
                                         tx_rx_distance_m = compute_distance_m(tx=ue_array[data_rx_at_ue_ue_id[index]],
                                                                               rx=ue)
+
                                         # Check if the shadowing sample should be changed
                                         if t >= shadowing_next_tick:
                                             shadowing_sample_index = shadowing_sample_index + 1
                                             shadowing_next_tick = t + shadowing_coherence_time_tick_duration
 
-                                        # DATA RX power
                                         data_rx_power = thz_channel.get_3gpp_prx_db(
                                             tx=ue_array[data_rx_at_ue_ue_id[index]], rx=ue,
                                             carrier_frequency_ghz=carrier_frequency_ghz,
@@ -3357,7 +3257,7 @@ for seed in range(initial_seed, final_seed + 1):
                                         # ID of the UE that has sent the data
                                         # -> need to check if there is another UE != from these two UEs that has TX a DATA or an ACK
                                         ue.ues_colliding_at_ue.clear()
-                                        # Compute the colliding UEs
+
                                         ue.ues_colliding_at_ue = check_collision(
                                             input_simulator_timing_structure=simulator_timing_structure,
                                             input_ue_id=ue.get_ue_id(),
@@ -3368,7 +3268,6 @@ for seed in range(initial_seed, final_seed + 1):
 
                                         useful_rx_power_db = data_rx_power
                                         add_interferer = True
-                                        # Check if there are interferers
                                         if len(ue.ues_interfering_at_ue) > 0:
                                             for i in range(len(ue.ues_interfering_at_ue)):
                                                 if f'UE_{data_rx_at_ue_ue_id[index]}' == \
@@ -3382,14 +3281,15 @@ for seed in range(initial_seed, final_seed + 1):
                                                                              data_rx_at_ue_starting_tick,
                                                                              data_rx_at_ue_ending_tick))
                                         interference_rx_power = 0
-                                        # Check if there are interferers
                                         if len(ue.ues_colliding_at_ue) > 0:
-                                            # Check every collision with another UE
                                             for user in ue_array:
                                                 for i in range(len(ue.ues_colliding_at_ue)):
                                                     if (user.get_ue_id() != ue.get_ue_id() and user.get_ue_id() !=
                                                             data_rx_at_ue_ue_id[index] and
                                                             f'UE_{user.get_ue_id()}' == ue.ues_colliding_at_ue[i][0]):
+                                                        # to compute the portion of data overlapped:
+                                                        # t_j = (t_end_current - t_start_interferer) /
+                                                        # (t_end_current - t_start_current)
                                                         if ue.ues_colliding_at_ue[i][1] < data_rx_at_ue_ending_tick < \
                                                                 ue.ues_colliding_at_ue[i][2]:
                                                             t_overlap = ((data_rx_at_ue_ending_tick -
@@ -3403,7 +3303,6 @@ for seed in range(initial_seed, final_seed + 1):
                                                                           data_rx_at_ue_starting_tick))
                                                         n_interferers += 1
                                                         tx_rx_distance_m = compute_distance_m(tx=user, rx=ue)
-                                                        # Compute the interference power
                                                         interference_rx_power += t_overlap * thz_channel.get_3gpp_prx_lin(
                                                             tx=user, rx=ue,
                                                             carrier_frequency_ghz=carrier_frequency_ghz,
@@ -3417,7 +3316,6 @@ for seed in range(initial_seed, final_seed + 1):
                                                             input_average_clutter_height_m=average_machine_height_m,
                                                             los_cond='ue_ue')
 
-                                            # Check every collision with the BS
                                             for i in range(len(ue.ues_colliding_at_ue)):
                                                 if 'BS' == ue.ues_colliding_at_ue[i][0] and 'BS' != data_rx_at_ue_ue_id[
                                                     index]:
@@ -3434,10 +3332,8 @@ for seed in range(initial_seed, final_seed + 1):
                                                                       ue.ues_colliding_at_ue[i][1]) /
                                                                      (data_rx_at_ue_ending_tick -
                                                                       data_rx_at_ue_starting_tick))
-
                                                     n_interferers += 1
                                                     tx_rx_distance_m = compute_distance_m(tx=bs, rx=ue)
-                                                    # Compute the interference power
                                                     interference_rx_power += t_overlap * thz_channel.get_3gpp_prx_lin(
                                                         tx=bs, rx=ue,
                                                         carrier_frequency_ghz=carrier_frequency_ghz,
@@ -3451,15 +3347,13 @@ for seed in range(initial_seed, final_seed + 1):
                                                         input_average_clutter_height_m=average_machine_height_m,
                                                         los_cond='bs_ue')
 
-                                        # Check if there are interferers
                                         if len(ue.ues_interfering_at_ue) > 0:
-                                            # for the intefering users (whose that before where useful user),
-                                            # I have to check if their ending tick of ACK or DATA is betwween the
+                                            # for the interfering users (whose that before where useful user),
+                                            # I have to check if their ending tick of ACK or DATA is between the
                                             # staring and the ending tick of the actual RX DATA/ACK
                                             # If Yes -> it is an interferer
                                             # If No -> remove from the list of interferers.
                                             copy_of_list = deepcopy(ue.ues_interfering_at_ue)
-                                            # Check every UE as possible interferer
                                             for user in ue_array:
                                                 for i in range(len(copy_of_list)):
                                                     if user.get_ue_id() != ue.get_ue_id() and \
@@ -3494,11 +3388,11 @@ for seed in range(initial_seed, final_seed + 1):
                                                                     use_channel_measurements=use_channel_measurements,
                                                                     input_average_clutter_height_m=average_machine_height_m,
                                                                     los_cond='ue_ue')
-                                                            elif t >= copy_of_list[i][2]:  # new
+                                                            elif t >= copy_of_list[i][2]:
                                                                 ue.ues_interfering_at_ue.remove(
                                                                     (copy_of_list[i][0], copy_of_list[i][1],
                                                                      copy_of_list[i][2]))
-                                            # Check the BS as possible interferer
+
                                             for i in range(len(copy_of_list)):
                                                 if 'BS' != data_rx_at_ue_ue_id[index]:
                                                     if 'BS' == copy_of_list[i][0]:
@@ -3518,7 +3412,7 @@ for seed in range(initial_seed, final_seed + 1):
                                                                               data_rx_at_ue_starting_tick))
                                                             n_interferers += 1
                                                             tx_rx_distance_m = compute_distance_m(tx=bs, rx=ue)
-                                                            # Compute the interference power
+
                                                             interference_rx_power += t_overlap * thz_channel.get_3gpp_prx_lin(
                                                                 tx=bs, rx=ue,
                                                                 carrier_frequency_ghz=carrier_frequency_ghz,
@@ -3531,17 +3425,15 @@ for seed in range(initial_seed, final_seed + 1):
                                                                 use_channel_measurements=use_channel_measurements,
                                                                 input_average_clutter_height_m=average_machine_height_m,
                                                                 los_cond='bs_ue')
-                                                        elif t >= copy_of_list[i][2]:  # new
+                                                        elif t >= copy_of_list[i][2]:
                                                             ue.ues_interfering_at_ue.remove(
                                                                 (copy_of_list[i][0], copy_of_list[i][1],
                                                                  copy_of_list[i][2]))
-                                        # No interference
+
                                         if interference_rx_power == 0:
                                             sinr_db = snr_db
-                                        # There is interference
-                                        # Compute the SINR
+
                                         else:
-                                            # interference_rx_power_db = 10 * np.log10(interference_rx_power)
                                             noise_power_dbw = thz_channel.get_thermal_noise_power_dbw(
                                                 input_noise_figure=noise_figure_ue, bandwidth_hz=bandwidth_hz)
                                             noise_power = 10 ** (noise_power_dbw / 10)
@@ -3557,41 +3449,39 @@ for seed in range(initial_seed, final_seed + 1):
 
                                         ue.n_interfering.append(n_interferers)
 
-                                        # Check if the DATA has been TX with success and the uplink buffer is not empty
+                                        # Before adding a new packet → check buffer capacity (MADRL: use per-UE madrl_Q)
+
                                         if success and ((len(ue.ul_buffer.buffer_packet_list) < \
-                                                         ue.Q_and_W_buffer_length + 1 and ue.check_generated_packet_present() is True) \
+                                                         ue.madrl_Q + 1 and ue.check_generated_packet_present() is True) \
                                                         or (
                                                                 (len(ue.ul_buffer.buffer_packet_list) < \
-                                                                 ue.Q_and_W_buffer_length and ue.check_generated_packet_present() is False))):
-
+                                                                 ue.madrl_Q and ue.check_generated_packet_present() is False))):
 
                                             ue.packet_forwarding.append(packet_id_rx_from_ue[index])
-                                            ################################# Multi-hop Implementation ##############################
-                                            # Check if in the uplink buffer there is a packet generated by the UE itself
+
                                             counter = 0
                                             for packet in ue.ul_buffer.buffer_packet_list:
                                                 if packet.get_generated_by_ue() == ue.ue_id:
                                                     counter += 1
                                             if counter > 0:
-                                                total_buffer_size = ue.Q_and_W_buffer_length + 1
+                                                total_buffer_size = ue.madrl_Q + 1
                                             else:
-                                                total_buffer_size = ue.Q_and_W_buffer_length
+                                                total_buffer_size = ue.madrl_Q
 
                                             if data_rx_at_ue_size_bytes[index] > 0 and len(
                                                     ue.ul_buffer.buffer_packet_list) < \
                                                     total_buffer_size:
-                                                # Check the DATA RX if it has to be added to the queue
+
                                                 for user in ue_array:
                                                     if data_rx_at_ue_ue_id[index] == user.get_ue_id():
                                                         if len(user.buffer_packet_sent) > 0:
                                                             for packet in user.buffer_packet_sent:
                                                                 if packet.packet_id == packet_id_rx_from_ue[index]:
-                                                                    # -1 -> pck rx in broadcast
                                                                     if packet.address == str(
                                                                             ue.get_ue_id()) or packet.address == "-1":
                                                                         ue.designated_rx = True
                                                                         break
-                                                            # Check if this UE is the designated UE
+
                                                             if ue.designated_rx:
 
                                                                 # reset the action variables
@@ -3602,7 +3492,6 @@ for seed in range(initial_seed, final_seed + 1):
 
                                                                 ue.designated_rx = False
 
-                                                                # Check every packet in the queue
                                                                 for n_packet in range(len(user.buffer_packet_sent)):
                                                                     if packet_id_rx_from_ue[index] == \
                                                                             user.buffer_packet_sent[n_packet].packet_id:
@@ -3627,7 +3516,7 @@ for seed in range(initial_seed, final_seed + 1):
                                                                             # If the packet is generated by the UE itself, force a broadcast action
                                                                             if packet_generated_by_ue_itself and \
                                                                                     ue.obs[0][
-                                                                                        -1] == 0:
+                                                                                        -1] == 0:  # and (np.sum(ue.obs[-1]) == 0):
                                                                                 ue.next_action = 3
                                                                             # Check if the packet exceeded the hop limit
                                                                             packet_out_of_hop_limit = False
@@ -3635,7 +3524,6 @@ for seed in range(initial_seed, final_seed + 1):
                                                                                 n_packet].get_hop_count() >= hop_limit:
                                                                                 packet_out_of_hop_limit = True
 
-                                                                            # The packet has to be added to the queue
                                                                             if (
                                                                                     packet_already_in_queue is False and packet_generated_by_ue_itself is False
                                                                                     and packet_out_of_hop_limit is False):
@@ -3652,6 +3540,7 @@ for seed in range(initial_seed, final_seed + 1):
                                                                                               n_packet].hop_count)
                                                                                 ue.n_forwarding += 1
                                                                                 # Successful data reception, add the data in the queue and transmit the ACK
+
                                                                                 ue.add_new_packet(current_tick=t,
                                                                                                   input_enable_print=enable_print,
                                                                                                   input_data_to_be_forwarded_bool=True,
@@ -3676,7 +3565,8 @@ for seed in range(initial_seed, final_seed + 1):
                                                                                                       n_packet].get_hop_count(),
                                                                                                   packet_address=(
                                                                                                       ue.get_unicast_rx_address() if ue.get_broadcast_bool() is False else "-1"),
-                                                                                                  generation_time=user.buffer_packet_sent[
+                                                                                                  generation_time=
+                                                                                                  user.buffer_packet_sent[
                                                                                                       n_packet].get_generated_by_ue_time_instant_tick())
 
                                                                                 ue.list_data_generated_during_wait_ack.append(
@@ -3701,7 +3591,6 @@ for seed in range(initial_seed, final_seed + 1):
                                                                                         user.buffer_packet_sent[
                                                                                             n_packet].get_id())
 
-                                                                            # The DATA is already present in the queue
                                                                             if (packet_already_in_queue is True and
                                                                                     packet_generated_by_ue_itself is False):
 
@@ -3721,10 +3610,8 @@ for seed in range(initial_seed, final_seed + 1):
                                                                                         user.buffer_packet_sent[
                                                                                             n_packet].get_id())
 
-                                                                # Check if this UE has RX some DATA successfully and it has appended to the uplink buffer
                                                                 if ue.forward_in_wait_ack:
                                                                     ue.forward_in_wait_ack = False
-                                                                    # Update the neighbor parameters if the neighbor table is not empty
                                                                     if np.sum(ue.obs[1]) > 0:
                                                                         if ue.get_ue_id() < data_rx_at_ue_ue_id[index]:
                                                                             ue.set_obs_update(
@@ -3739,28 +3626,16 @@ for seed in range(initial_seed, final_seed + 1):
                                                                                 input_rx_power=data_rx_power)
                                                                 else:
                                                                     remain_in_wait_ack = True
-                                                            # This UE is not the designated dest
                                                             else:
                                                                 remain_in_wait_ack = True
 
-                                            # No DATA RX or the uplink buffer is full
                                             else:
                                                 remain_in_wait_ack = True
-                                            ########################## End Multi-hop Implementation ##########################
 
-                                        # No success or uplink buffer full
+
                                         else:
-                                            # Check if update the metrics if the DATA had success but  the queue is full
-                                            if success and ((len(ue.ul_buffer.buffer_packet_list) == \
-                                                             ue.Q_and_W_buffer_length + 1 and ue.check_generated_packet_present() is True) \
-                                                            or (
-                                                                    (len(ue.ul_buffer.buffer_packet_list) == \
-                                                                     ue.Q_and_W_buffer_length and ue.check_generated_packet_present() is False))):
-                                                ue.packets_discarded_full_queue += 1
-                                                ue.W_not_added_pcks_per_step_counter += 1
-                                                ue.Q_not_added_pcks_per_step_counter += 1
+
                                             remain_in_wait_ack = True
-                                        # Update the simulator structure
                                         if len(simulator_timing_structure[f'UE_{ue.get_ue_id()}']['DATA_RX'][
                                                    f'UE_{data_rx_at_ue_ue_id[index]}']) > 1:
                                             # Update the timing structure to reset this reception
@@ -3776,77 +3651,33 @@ for seed in range(initial_seed, final_seed + 1):
                                                 remain_in_wait_ack = False
                                                 ue.set_retransmission_packets(retransmission_bool=True)
 
-                            # Check if there some packets to transmit not RX during WAIT_ACK
                             if len(ue.ul_buffer.buffer_packet_list) > 0:
                                 ue.set_retransmission_packets(retransmission_bool=True)
                             else:
                                 ue.set_retransmission_packets(retransmission_bool=False)
 
-                            ######################################## RL Implementation #####################################
-                            # Check if the last transmission was broadcast
                             if ue.get_broadcast_bool() is True:
                                 ue.ack_rx_during_wait_ack = False
                                 ue.data_rx_during_wait_ack = False
-                                # If it is broadcast do not interrupt WAIT_ACK with a reception
                                 if t != ue.get_state_final_tick():
                                     remain_in_wait_ack = True
                                 else:
                                     remain_in_wait_ack = False
-                            ######################################## End RL Implementation #################################
 
                             # Update the future state
                             if remain_in_wait_ack:
-                                # Remain to WAIT_ACK until the end of the slot
+                                # Remain in WAIT_ACK until the end of the slot
                                 ue.set_state_duration(input_ticks=ue.get_state_final_tick())
                             elif (len(ue.list_data_generated_during_wait_ack) > 0 or
                                   len(ue.list_data_rx_from_ue_id) > 0) and remain_in_wait_ack is False and \
                                     star_topology is False:
 
-                                ######################### Multi-hop Implementation ##########################
-                                # Check if the last transmission was broadcast
                                 if ue.get_broadcast_bool():
                                     ue.check_remove_packet(input_enable_print=enable_print)
                                     if len(ue.ul_buffer.buffer_packet_list) > 0:
                                         ue.set_retransmission_packets(retransmission_bool=True)
                                     else:
                                         ue.set_retransmission_packets(retransmission_bool=False)
-                                ######################### End Multi-hop Implementation ##########################
-                                # All the acks have been count both in broadcast and in unicast so update the state
-                                # check if the number of tx_data corresponds to the step duration
-                                if ue.Q_and_W_tx_data_counter % number_of_tx_data_per_step == 0:
-                                    if enable_print:
-                                        print("UE ", ue.get_ue_id(), " has tx data counter ", ue.Q_and_W_tx_data_counter)
-                                        print("UE", ue.get_ue_id(), " has rateo ", ue.Q_and_W_tx_data_counter / number_of_tx_data_per_step)
-
-                                    # Only W RL
-                                    # Call the DRL
-                                    choose_next_action_tb_only_W(
-                                                                input_ue=ue,
-                                                                input_enable_print=enable_print,
-                                                                input_n_simulation=n_simulation,
-                                                                input_n_simulations=n_simulations,
-                                                                input_n_actions=n_actions,
-                                                                input_W_min=contention_window_int_min,
-                                                                input_W_max=contention_window_int_max,
-                                                                input_goal_oriented=goal_oriented,
-                                                                input_normalized_S=normalized_S,
-                                                                input_current_tick=t
-                                                                )
-
-                                    # Only Q RL
-                                    # Call the DRL
-                                    choose_next_action_tb_only_Q(
-                                                                input_ue=ue,
-                                                                input_enable_print=enable_print,
-                                                                input_n_simulation=n_simulation,
-                                                                input_n_simulations=n_simulations,
-                                                                input_n_actions=n_actions,
-                                                                input_Q_min=max_n_packets_to_be_forwarded_min,
-                                                                input_Q_max=max_n_packets_to_be_forwarded_max,
-                                                                input_goal_oriented=goal_oriented,
-                                                                input_normalized_S=normalized_S,
-                                                                input_current_tick=t
-                                                                )
 
                                 for other_ue in ue_array:
                                     if other_ue != ue:
@@ -3855,10 +3686,6 @@ for seed in range(initial_seed, final_seed + 1):
                                 # Compute energy spent
                                 ue.energy_consumed -= power_ack * (
                                         ue.get_state_final_tick() - t) * simulator_tick_duration_s
-                                # ue.energy_consumed -= power_ack * (ue.get_state_final_tick() - t)
-                                # if enable_print:
-                                #     print("Energy for UE ", ue.get_ue_id(), " = ",
-                                #           ue.energy_consumed / simulator_tick_duration_s)
 
                                 ue.list_ack_sent_from_bs.clear()
                                 ue.ues_colliding_at_ue.clear()
@@ -3866,7 +3693,6 @@ for seed in range(initial_seed, final_seed + 1):
                                 if len(ue.ues_interfering_at_ue) > 0:
                                     ue.ues_interfering_at_ue.clear()
                                 copy_of_dictonary = deepcopy(ue.dict_data_rx_during_wait_ack)
-                                # Set the previous state for the TX_ACK
                                 ue.previous_state = 'WAIT_ACK'
 
                                 index = 0
@@ -3878,11 +3704,9 @@ for seed in range(initial_seed, final_seed + 1):
                                 for user_id in ue.list_data_rx_from_ue_id:
                                     if user_id not in copy_data_rx_ue_id:
                                         copy_data_rx_ue_id.append(user_id)
-
-                                # Move to TX_ACK
+                                # if a DATA to be forwarded has been received, the UE has to go in ACK TX for that UE
                                 go_in_tx_ack(input_ue=ue, input_ack_duration_tick=len(copy_data_rx_ue_id) * t_ack_tick,
-                                             current_tick=t,
-                                             input_enable_print=enable_print)
+                                             current_tick=t, input_enable_print=enable_print)
 
                                 j = - 1
 
@@ -3890,7 +3714,6 @@ for seed in range(initial_seed, final_seed + 1):
 
                                     j += 1
 
-                                    # Update the simulator structure
                                     for index in range(len(ue.dict_data_rx_during_wait_ack[ue_id])):
                                         for other_ue in ue_array:
                                             if other_ue != ue:
@@ -3942,11 +3765,8 @@ for seed in range(initial_seed, final_seed + 1):
                                     else:
                                         packet.set_retransmission_packets(retransmission_bool=False)
 
-                                ################################### RL Implementation ########################################
-                                # last transmission was unicast
                                 if ue.get_last_action() == 0:
-                                    # if ue.check_rtx() is False:
-                                    # ue.set_data_discard_bool(input_data_discard_bool=True)
+
                                     if enable_print:
                                         print("UE ", ue.get_ue_id(), " has transmitted in unicast with "
                                                                      "no success towards ",
@@ -3954,21 +3774,19 @@ for seed in range(initial_seed, final_seed + 1):
                                     ue.unicast_handling_failure_no_reward(input_ttl=TTL)
                                     ue.new_action_bool = True
 
-
-                                # last transmission was broadcast
                                 if ue.get_broadcast_bool() is True:
-                                    # The neighbor table is empty
+
                                     if np.sum(ue.temp_obs[1]) == 0:
+
                                         if enable_print:
                                             print("UE ", ue.get_ue_id(),
                                                   " has transmitted in broadcast with no success")
                                         ue.broadcast_handling_failure_no_reward(input_ttl=TTL)
-                                        # Si
+
                                         ue.new_action_bool = True
 
                                         ue.reset_temp_obs()
 
-                                    # The neighbor table is not empty
                                     else:
                                         if enable_print:
                                             print("UE ", ue.get_ue_id(),
@@ -3980,13 +3798,13 @@ for seed in range(initial_seed, final_seed + 1):
 
                                         ue.new_action_bool = True
                                         ue.reset_temp_obs()
-                                ###################################### End RL Implementation ####################################
-                                # Update the uplink buffer RTX
+
                                 if ue.check_num_tx() is False:  # Reached the maximum number of retransmissions ->
                                     # discard that packet and generate a new one if full queue
+                                    ue.madrl_dr = False  # ── MADRL: drop due to max retransmissions ──
                                     if ue.check_generated_packet_present() is False:
                                         if ue.is_there_a_new_data(input_current_tick=t,
-                                                                  max_n_packets_to_be_forwarded=ue.Q_and_W_buffer_length) \
+                                                                  max_n_packets_to_be_forwarded=ue.madrl_Q) \
                                                 is True:
                                             ue.update_num_tx(
                                                 input_packet_id=ue.ul_buffer.get_last_packet().get_id(),
@@ -4003,7 +3821,7 @@ for seed in range(initial_seed, final_seed + 1):
                                     ue.reception_ack_during_wait = False
                                     if ue.check_generated_packet_present() is False:
                                         if ue.is_there_a_new_data(input_current_tick=t,
-                                                                  max_n_packets_to_be_forwarded=ue.Q_and_W_buffer_length) is \
+                                                                  max_n_packets_to_be_forwarded=ue.madrl_Q) is \
                                                 True:
                                             ue.update_num_tx(
                                                 input_packet_id=ue.ul_buffer.get_last_packet().get_id(),
@@ -4012,66 +3830,23 @@ for seed in range(initial_seed, final_seed + 1):
 
                                             ue.check_num_tx()
 
-                            # Check the DATA RX during WAIT_ACK
                             elif len(ue.list_data_generated_during_wait_ack) == 0:
                                 ue.ues_colliding_at_ue.clear()
                                 ue.ues_interfering_at_ue.clear()
-                                ############################### Multi-hop Implementation ##############################
-                                # Check if the last transmission was broadcast
                                 if ue.get_broadcast_bool():
                                     ue.check_remove_packet(input_enable_print=enable_print)
                                     if len(ue.ul_buffer.buffer_packet_list) > 0:
                                         ue.set_retransmission_packets(retransmission_bool=True)
                                     else:
                                         ue.set_retransmission_packets(retransmission_bool=False)
-                                ############################## End Multi-hop Implementation ##############################
-                                # All the acks have been count both in broadcast and in unicast so update the state
-                                # check if the number of tx_data corresponds to the step duration
-                                if ue.Q_and_W_tx_data_counter % number_of_tx_data_per_step == 0:
-                                    if enable_print:
-                                        print("UE ", ue.get_ue_id(), " has tx data counter ", ue.Q_and_W_tx_data_counter)
-                                        print("UE", ue.get_ue_id(), " has rateo ", ue.Q_and_W_tx_data_counter / number_of_tx_data_per_step)
 
-                                    # Only W RL
-                                    # Call the DRL
-                                    choose_next_action_tb_only_W(
-                                                                input_ue=ue,
-                                                                input_enable_print=enable_print,
-                                                                input_n_simulation=n_simulation,
-                                                                input_n_simulations=n_simulations,
-                                                                input_n_actions=n_actions,
-                                                                input_W_min=contention_window_int_min,
-                                                                input_W_max=contention_window_int_max,
-                                                                input_goal_oriented=goal_oriented,
-                                                                input_normalized_S=normalized_S,
-                                                                input_current_tick=t
-                                                                )
-
-                                    # Only W RL
-                                    # Call the DRL
-                                    choose_next_action_tb_only_Q(
-                                                                input_ue=ue,
-                                                                input_enable_print=enable_print,
-                                                                input_n_simulation=n_simulation,
-                                                                input_n_simulations=n_simulations,
-                                                                input_n_actions=n_actions,
-                                                                input_Q_min=max_n_packets_to_be_forwarded_min,
-                                                                input_Q_max=max_n_packets_to_be_forwarded_max,
-                                                                input_goal_oriented=goal_oriented,
-                                                                input_normalized_S=normalized_S,
-                                                                input_current_tick=t
-                                                                )
-
-                                # ue.update_num_tx(input_enable_print=enable_print)
-                                # Reduce the energy consumed if the UE has stopped the WAIT_ACK before its end
-                                # Compute energy spent
                                 ue.energy_consumed -= power_ack * (
                                         ue.get_state_final_tick() - t) * simulator_tick_duration_s
-                                # No packets to retransmit
+
                                 if ue.get_retransmission_packets() is False:
                                     # the UE is not retransmitting anything -> The UE will generate a new packet if Full-queue
                                     if ue.is_there_a_new_data(input_current_tick=t,
-                                                              max_n_packets_to_be_forwarded=ue.Q_and_W_buffer_length) \
+                                                              max_n_packets_to_be_forwarded=ue.madrl_Q) \
                                             is True:
                                         ue.update_num_tx(input_enable_print=enable_print)
                                         ue.check_last_round = False
@@ -4079,42 +3854,43 @@ for seed in range(initial_seed, final_seed + 1):
                                         ue.check_num_tx()
                                         ue.new_action_bool = True
 
-                                    # The last transmission was broadcast
                                     if ue.get_broadcast_bool() is True:
-                                        # The neighbor table is empty
                                         if np.sum(ue.temp_obs[1]) == 0:
+
                                             if enable_print:
                                                 print("UE ", ue.get_ue_id(),
                                                       " has transmitted in broadcast with no success")
                                             ue.broadcast_handling_failure_no_reward(input_ttl=TTL)
-                                            # si
+
                                             ue.new_action_bool = True
 
                                             ue.reset_temp_obs()
 
-                                        # The neighbor table is not empty
                                         else:
                                             if enable_print:
                                                 print("UE ", ue.get_ue_id(),
                                                       " has transmitted in broadcast with success")
+
                                             ue.broadcast_handling_no_reward(input_ttl=TTL)
                                             ue.set_last_action(input_last_action=None)
                                             ue.set_broadcast_bool(input_broadcast_bool=False)
+
                                             ue.new_action_bool = True
                                             ue.reset_temp_obs()
-                                    go_in_bo_bool = True
 
-                                # Some packets has to be retransmitted
+                                    # The queue is full so go in BO
+                                    go_in_bo_bool = True
                                 elif ue.get_retransmission_packets() is True:
                                     # The UE is forwarding a packet
                                     go_in_bo_bool = True
                                     ue.update_num_tx(input_enable_print=enable_print)
+
                                     for packet in ue.ul_buffer.buffer_packet_list:
                                         packet.set_retransmission_packets(retransmission_bool=True)
 
-                                    # The last transmission was unicast
+                                    # Computation of the reward in case no ACK received and the maximum number of
+                                    # retransmissions is reached
                                     if ue.get_last_action() == 0:
-                                        # if ue.check_rtx() is False:
                                         if enable_print:
                                             print("UE ", ue.get_ue_id(), " has transmitted in unicast with "
                                                                          "no success towards ",
@@ -4124,24 +3900,22 @@ for seed in range(initial_seed, final_seed + 1):
 
                                         ue.new_action_bool = True
 
-                                    # The last transmission was broadcast
                                     if ue.get_broadcast_bool() is True:
-                                        # The neighbor table is empty
                                         if np.sum(ue.temp_obs[1]) == 0:
+
                                             if enable_print:
                                                 print("UE ", ue.get_ue_id(),
                                                       " has transmitted in broadcast with no success")
                                             ue.broadcast_handling_failure_no_reward(input_ttl=TTL)
-                                            # si
-                                            ue.new_action_bool = True
 
+                                            ue.new_action_bool = True
                                             ue.reset_temp_obs()
 
-                                        # The neighbor table is not empty
                                         else:
                                             if enable_print:
                                                 print("UE ", ue.get_ue_id(),
                                                       " has transmitted in broadcast with success")
+
                                             ue.set_last_action(input_last_action=None)
                                             ue.set_broadcast_bool(input_broadcast_bool=False)
                                             ue.broadcast_handling_no_reward(input_ttl=TTL)
@@ -4149,12 +3923,12 @@ for seed in range(initial_seed, final_seed + 1):
                                             ue.new_action_bool = True
                                             ue.reset_temp_obs()
 
-                                    # Check the number of RTX of each DATA
                                     if ue.check_num_tx() is False:  # Reached the maximum number of retransmissions ->
                                         # discard that packet and generate a new one if full queue
+                                        ue.madrl_dr = False  # ── MADRL: drop due to max retransmissions ──
                                         if ue.check_generated_packet_present() is False:
                                             if ue.is_there_a_new_data(input_current_tick=t,
-                                                                      max_n_packets_to_be_forwarded=ue.Q_and_W_buffer_length) \
+                                                                      max_n_packets_to_be_forwarded=ue.madrl_Q) \
                                                     is True:
                                                 ue.update_num_tx(
                                                     input_packet_id=ue.ul_buffer.get_last_packet().get_id(),
@@ -4169,7 +3943,6 @@ for seed in range(initial_seed, final_seed + 1):
                                             else:
                                                 # The queue is empy so go in IDLE until the next data generation
                                                 go_in_idle_bool = True
-                                    # The packet has not reached the maximum numbero of RTX
                                     else:
                                         if ue.reception_ack_during_wait is True:
                                             ue.reception_ack_during_wait = False
@@ -4181,8 +3954,7 @@ for seed in range(initial_seed, final_seed + 1):
                                             if new_packet_generation is True:
                                                 new_packet_generation = False
                                                 if ue.is_there_a_new_data(input_current_tick=t,
-                                                                          max_n_packets_to_be_forwarded=
-                                                                          ue.Q_and_W_buffer_length) is True:
+                                                                          max_n_packets_to_be_forwarded=ue.madrl_Q) is True:
                                                     ue.update_num_tx(
                                                         input_packet_id=ue.ul_buffer.get_last_packet().get_id(),
                                                         input_enable_print=enable_print)
@@ -4194,12 +3966,10 @@ for seed in range(initial_seed, final_seed + 1):
                                     # The queue is empy so go in IDLE until the next data generation
                                     go_in_idle_bool = True
 
-                            # Move to BACKOFF STATE
                             if go_in_bo_bool:
                                 if ue.reception_ack_during_wait is True:
                                     ue.reception_ack_during_wait = False
 
-                                # Check if the uplink buffer status and set the new transmission type
                                 counter_new_act = 0
                                 for packet in ue.ul_buffer.buffer_packet_list:
 
@@ -4212,14 +3982,12 @@ for seed in range(initial_seed, final_seed + 1):
                                 if counter_new_act == 0:
                                     ue.new_action_bool = True
 
-                                # Compute the BACKOFF STATE parameters
                                 backoff_duration_tick = get_backoff_duration(input_ue=ue,
                                                                              input_contention_window_int=
-                                                                             ue.Q_and_W_contention_window,
+                                                                             ue.madrl_W,
                                                                              input_t_backoff_tick=t_backoff_tick,
                                                                              input_max_prop_delay_tick=
                                                                              max_prop_delay_tick)
-                                # Move to BACKOFF STATE
                                 go_in_backoff(input_ue=ue, current_tick=t,
                                               input_backoff_duration_tick=backoff_duration_tick,
                                               input_enable_print=enable_print)
@@ -4228,7 +3996,106 @@ for seed in range(initial_seed, final_seed + 1):
                                 if len(ue.ues_interfering_at_ue) > 0:
                                     ue.ues_interfering_at_ue.clear()
 
-                            # Move to IDLE STATE
+                                # ── MADRL T_step trigger ────────────────────────────────────────
+                                if ue.madrl_step_cnt >= T_step_madrl:
+                                    # ── 1. Build current state ──────────────────────────────────
+                                    nt_avg = (ue.madrl_nt_sum / ue.madrl_nt_count
+                                              if ue.madrl_nt_count > 0 else 1.0)
+                                    nt_norm = ue.madrl_nt / T_step_madrl  # normalised Nt in [0,1]
+                                    nt_ratio = ue.madrl_nt / max(nt_avg, 1e-6)
+                                    buf_util = (len(ue.ul_buffer.buffer_packet_list) / max(ue.madrl_Q, 1))
+                                    norm_w = (ue.madrl_W - W_min) / max(W_max - W_min, 1)
+                                    norm_q = (ue.madrl_Q - Q_min) / max(Q_max - Q_min, 1)
+
+                                    s1_curr = np.array([nt_ratio, norm_w], dtype=np.float32)
+                                    s2_curr = np.array([nt_ratio, buf_util, norm_q], dtype=np.float32)
+
+                                    # ── 2. Compute reward ───────────────────────────────────────
+                                    reward = (sigma_r * nt_norm
+                                              + beta_r * float(ue.madrl_dr)
+                                              + delta_r * float(ue.madrl_dq))
+                                    ue.reward_history.append(float(reward))  # ← save reward
+
+                                    # ── 3. Store transition (only if prev state exists) ─────────
+                                    if ue.madrl_prev_state1 is not None:
+                                        ue.madrl_rb1.append((ue.madrl_prev_state1,
+                                                             ue.madrl_prev_action1,
+                                                             reward, s1_curr, 0.0))
+                                        ue.madrl_rb2.append((ue.madrl_prev_state2,
+                                                             ue.madrl_prev_action2,
+                                                             reward, s2_curr, 0.0))
+
+                                        # ── 4. Train DDQNs ───────────────────────────────────
+                                        ddqn_train_step(ue.madrl_ddqn1_online, ue.madrl_ddqn1_target,
+                                                        ue.madrl_rb1, batch_size, discount_factor,
+                                                        n_actions_madrl)
+                                        ddqn_train_step(ue.madrl_ddqn2_online, ue.madrl_ddqn2_target,
+                                                        ue.madrl_rb2, batch_size, discount_factor,
+                                                        n_actions_madrl)
+                                        ue.madrl_train_counter1 += 1
+                                        ue.madrl_train_counter2 += 1
+
+                                        # ── 5. Hard target-net update ────────────────────────
+                                        if ue.madrl_train_counter1 % target_update_freq == 0:
+                                            ue.madrl_ddqn1_target.set_weights(
+                                                ue.madrl_ddqn1_online.get_weights())
+                                        if ue.madrl_train_counter2 % target_update_freq == 0:
+                                            ue.madrl_ddqn2_target.set_weights(
+                                                ue.madrl_ddqn2_online.get_weights())
+
+                                    # ── 6. Select new actions (ε-greedy) ──────────────────────
+                                    _explore = np.random.rand() < epsilon_madrl
+                                    if _explore:
+                                        a1 = np.random.randint(n_actions_madrl)
+                                        a2 = np.random.randint(n_actions_madrl)
+                                    else:
+                                        q1 = ue.madrl_ddqn1_online(
+                                            s1_curr[np.newaxis, :], training=False).numpy()[0]
+                                        q2 = ue.madrl_ddqn2_online(
+                                            s2_curr[np.newaxis, :], training=False).numpy()[0]
+                                        a1 = int(np.argmax(q1))
+                                        a2 = int(np.argmax(q2))
+
+                                    # ── 7. Apply W action: 0=−−, 1===, 2=++ ───────────────────
+                                    if a1 == 0:
+                                        ue.madrl_W = max(W_min, ue.madrl_W - 1)
+                                    elif a1 == 2:
+                                        ue.madrl_W = min(W_max, ue.madrl_W + 1)
+
+                                    # ── 8. Apply Q action: 0=−−, 1===, 2=++ ───────────────────
+                                    if a2 == 0:
+                                        ue.madrl_Q = max(Q_min, ue.madrl_Q - 1)
+                                    elif a2 == 2:
+                                        ue.madrl_Q = min(Q_max, ue.madrl_Q + 1)
+
+                                    # ── Policy / ablation log ─────────────────────────────────
+                                    ue.policy_a1_hist.append(int(a1))
+                                    ue.policy_a2_hist.append(int(a2))
+                                    ue.policy_explore_hist.append(bool(_explore))
+                                    ue.policy_W_hist.append(int(ue.madrl_W))
+                                    ue.policy_Q_hist.append(int(ue.madrl_Q))
+                                    ue.policy_epsilon_hist.append(float(epsilon_madrl))
+                                    ue.policy_nt_ratio_hist.append(float(nt_ratio))
+                                    ue.policy_buf_util_hist.append(float(buf_util))
+                                    ue.policy_sim_hist.append(int(n_simulation))
+
+                                    # ── 9. Update running Nt average ──────────────────────────
+                                    ue.madrl_nt_sum += ue.madrl_nt
+                                    ue.madrl_nt_count += 1
+
+                                    # ── 10. Save state/action for next step ───────────────────
+                                    ue.madrl_prev_state1 = s1_curr
+                                    ue.madrl_prev_state2 = s2_curr
+                                    ue.madrl_prev_action1 = a1
+                                    ue.madrl_prev_action2 = a2
+
+                                    # ── 11. Reset per-step counters ───────────────────────────
+                                    ue.madrl_nt = 0
+                                    ue.madrl_step_cnt = 0
+                                    ue.madrl_dr = True
+                                    ue.madrl_dq = True
+                                # ─────────────────────────────────────────────────────────────
+
                             elif go_in_idle_bool:
                                 if ue.reception_ack_during_wait is True:
                                     ue.reception_ack_during_wait = False
@@ -4252,6 +4119,7 @@ for seed in range(initial_seed, final_seed + 1):
 
                         # The BS has received an ACK
                         # Find the corresponding transmission
+
                         (ack_rx_at_bs_starting_tick, ack_rx_at_bs_ending_tick, ack_rx_at_bs_rx_id_int, ack_rx_id,
                          ack_rx_at_bs_tx_id_str, n_ack_rx_simultaneously) = find_ack_rx_times_at_bs_tick(
                             input_simulator_timing_structure=simulator_timing_structure, current_tick=t)
@@ -4262,7 +4130,7 @@ for seed in range(initial_seed, final_seed + 1):
                             for index in range(len(data_rx_at_bs_ue_id)):
                                 # Compute the tx-rx distance
                                 tx_rx_distance_m = compute_distance_m(tx=ue_array[data_rx_at_bs_ue_id[index]], rx=bs)
-                                # print("DISTANZA UE ", data_rx_at_bs_ue_id, " - BS = ", tx_rx_distance_m)
+
                                 # Check if the shadowing sample should be changed
                                 if t >= shadowing_next_tick:
                                     shadowing_sample_index = shadowing_sample_index + 1
@@ -4313,9 +4181,10 @@ for seed in range(initial_seed, final_seed + 1):
                                                                 data_rx_at_bs_starting_tick, data_rx_at_bs_ending_tick))
 
                                 success_at_bs = False
+
                                 useful_rx_power_db = data_rx_power
+
                                 add_interferer = True
-                                # Check the interferers
                                 if len(ues_interfering_at_bs) > 0:
                                     for i in range(len(ues_interfering_at_bs)):
                                         if data_rx_at_bs_ue_id[index] == \
@@ -4362,8 +4231,8 @@ for seed in range(initial_seed, final_seed + 1):
                                                     los_cond='bs_ue')
 
                                 if len(ues_interfering_at_bs) > 0:
-                                    # for the intefering users (whose that before where useful user),
-                                    # I have to check if their ending tick of ACK or DATA is betwween the
+                                    # for the interfering users (whose that before where useful user),
+                                    # I have to check if their ending tick of ACK or DATA is between the
                                     # staring and the ending tick of the actual RX DATA/ACK
                                     # If Yes -> it is an interferer
                                     # If No -> remove from the list of interferers.
@@ -4420,9 +4289,6 @@ for seed in range(initial_seed, final_seed + 1):
                                 else:
                                     success = False
 
-                                # print("BS has ", n_interferers, " interferers.")
-                                # print("Success = ", success, " sinr = ", sinr_db, " snr = ", snr_db)
-
                                 if success:
                                     packets_received = 0
                                     packets_received_relay = 0
@@ -4430,6 +4296,7 @@ for seed in range(initial_seed, final_seed + 1):
 
                                     # A DATA has been successfully received, so go in TX_ACK
                                     # Go in TX_ACK
+                                    # the BS has to WAIT the end of a burst TX from a UE, before going in ACK TX
                                     bs.sequence_number_of_packet_rx = output_data_rx_packet_id[index]
 
                                     # Find the traffic type of the successful UE
@@ -4441,6 +4308,7 @@ for seed in range(initial_seed, final_seed + 1):
                                                 print("Successful transmission from UE: ", data_rx_at_bs_ue_id[index],
                                                       " at t = ", t)
                                             successful_ue_traffic_type = ue.get_traffic_type()
+
                                             # Save the id of the UE and the ID of the packet received, to avoid counting
                                             # multiple reception
                                             buffer_size_tick = 0
@@ -4453,7 +4321,6 @@ for seed in range(initial_seed, final_seed + 1):
                                                 if (bs.end_of_rx_for_ack_tx is None or ue.end_data_tx +
                                                         ue.get_prop_delay_to_bs_tick() > bs.end_of_rx_for_ack_tx):
                                                     bs.end_of_rx_for_ack_tx = ue.end_data_tx + ue.get_prop_delay_to_bs_tick()
-                                                # print("BS has to remain in RX until: ", bs.end_of_rx_for_ack_tx)
 
                                                 for n_packet in range(len(ue.buffer_packet_sent)):
                                                     # 1) check if the UE is a relay or not
@@ -4488,8 +4355,9 @@ for seed in range(initial_seed, final_seed + 1):
                                                                 # add the time needed to transmit the ACK +
                                                                 # the propagation delay between the BS and the UE
                                                                 if star_topology is False:
-                                                                    latency = (t + t_ack_tick + ue.get_prop_delay_to_bs_tick() -
-                                                                               ue.packet_generation_instant) * \
+                                                                    latency = (
+                                                                                          t + t_ack_tick + ue.get_prop_delay_to_bs_tick() -
+                                                                                          ue.packet_generation_instant) * \
                                                                               simulator_tick_duration_s
                                                                     ue.latency_ue.append(latency)
                                                                     # print("Latency for UE ", ue.get_ue_id(), " = ", latency,
@@ -4517,12 +4385,10 @@ for seed in range(initial_seed, final_seed + 1):
                                                                 # if yes, decrease the number of packets received,
                                                                 # if not, keep it as it is
 
-                                                                ##################### Multi-hop Implementation #####################
                                                                 user = ue.buffer_packet_sent[
                                                                     n_packet].get_generated_by_ue()
                                                                 packet_id = ue.buffer_packet_sent[
                                                                     n_packet].get_packet_id_generator()
-                                                                ##################### End Multi-hop Implementation #################
 
                                                                 if enable_print:
                                                                     print("The BS has received packet ", packet_id,
@@ -4540,6 +4406,7 @@ for seed in range(initial_seed, final_seed + 1):
                                                                         print(
                                                                             "BS doesn't count for that RX, so it counts now.")
                                                                     bs.packet_id_received[user].append(packet_id)
+
                                                                     packets_received_relay = 1
                                                                     packets_received_at_bs += 1
                                                                     bs.update_n_data_rx_from_ues(
@@ -4547,17 +4414,25 @@ for seed in range(initial_seed, final_seed + 1):
                                                                             n_packet].get_generated_by_ue(),
                                                                         packets_received=packets_received_relay)
                                                                     if star_topology is False:
+                                                                        # In case of multi-hop, for the latency computation
+                                                                        # it is necessary to take into account to the
+                                                                        # packet generation instant of the source UE
                                                                         for i in ue_array:
                                                                             if i.get_ue_id() == user:
                                                                                 latency = (t + t_ack_tick +
                                                                                            i.get_prop_delay_to_bs_tick() -
-                                                                                           ue.buffer_packet_sent[n_packet].get_generated_by_ue_time_instant_tick()) * \
+                                                                                           ue.buffer_packet_sent[
+                                                                                               n_packet].get_generated_by_ue_time_instant_tick()) * \
                                                                                           simulator_tick_duration_s
                                                                                 i.latency_ue.append(latency)
+                                                                                # print("Latency for UE ", i.get_ue_id(), " = ", latency,
+                                                                                #       "tick -> Packet generated at t = ",
+                                                                                #       i.packet_generation_instant)
 
                                                                 else:
                                                                     if enable_print:
                                                                         print(" BS has already count that RX")
+
                                                         else:
                                                             ack_packet_id = ue.buffer_packet_sent[
                                                                 n_packet].get_id()  # Andrea
@@ -4573,8 +4448,6 @@ for seed in range(initial_seed, final_seed + 1):
                                                           " has already removed the packet "
                                                           "from the queue.")
 
-                                            # print("BS has received ", bs.get_n_data_rx_from_ues(input_ue_id=ue.get_ue_id()),
-                                            #       "packets from UE ", ue.get_ue_id())
                                     if successful_ue_traffic_type is not None:
 
                                         bs.update_n_data_rx(input_ue_traffic_type=successful_ue_traffic_type,
@@ -4584,9 +4457,6 @@ for seed in range(initial_seed, final_seed + 1):
                                     else:
                                         sys.exit('UE traffic type not yet supported '
                                                  'when controlling the successful transmitting UE at the BS')
-
-                                    # Update the timing structure for UEs -> MOVED AFTER
-                                    # Save in a dictionary the id of the UE and the corresponding ID of the packet received
 
                                     bs.temp_packet_id_received[data_rx_at_bs_ue_id[index]].append(ack_packet_id)
 
@@ -4650,18 +4520,15 @@ for seed in range(initial_seed, final_seed + 1):
                                 # this method takes in input both the current UE_ID that has received a data and both the
                                 # ID of the UE that has sent the data
                                 # -> need to check if there is another UE != from these two UEs that has TX a DATA or an ACK
-
                                 ues_colliding_at_bs.clear()
-
                                 ues_colliding_at_bs = check_collision_bs(
                                     input_simulator_timing_structure=simulator_timing_structure,
                                     input_ue_id=ue_id,
                                     input_t_start_rx=ack_rx_at_bs_starting_tick,
                                     input_t_end_rx=ack_rx_at_bs_ending_tick, ues_colliding=ues_colliding_at_bs)
 
-                                if f"UE_{ue_id}" in ues_colliding_at_bs:
-                                    ues_colliding_at_bs.remove(f"UE_{ue_id}")
-                                #################### End Multi-hop Implementation ######################
+                                if f'UE_{ue_id}' in ues_colliding_at_bs:
+                                    ues_colliding_at_bs.remove(f'UE_{ue_id}')
 
                                 add_interferer = True
                                 if len(ues_interfering_at_bs) > 0:
@@ -4685,7 +4552,6 @@ for seed in range(initial_seed, final_seed + 1):
                                             if \
                                             simulator_timing_structure['BS']['ACK_RX'][ack_rx_at_bs_tx_id_str[index]][:,
                                             3][1] == packet_id:
-                                                # if data_rx_at_bs_ending_tick != ack_rx_at_bs_ending_tick:
                                                 # Update the timing structure to reset this reception
                                                 remove_item_in_timing_structure(
                                                     input_simulator_timing_structure=simulator_timing_structure,
@@ -4733,8 +4599,9 @@ for seed in range(initial_seed, final_seed + 1):
                                              input_rx_duration_tick=tot_simulation_time_tick + 1,
                                              input_enable_print=enable_print)
                             bs.id_ues_data_rx.clear()
-                            # bs.packet_rx = False
+
                             for ue in ue_array:
+
                                 new_list = deepcopy(simulator_timing_structure['BS']['ACK_RX'][f'UE_{ue.get_ue_id()}'])
                                 for i in range(len(new_list)):
                                     if len(simulator_timing_structure['BS']['ACK_RX'][f'UE_{ue.get_ue_id()}']) > 1:
@@ -4744,7 +4611,6 @@ for seed in range(initial_seed, final_seed + 1):
                                                 simulator_timing_structure['BS']['ACK_RX'][f'UE_{ue.get_ue_id()}'][:,
                                                 0][
                                                     1] <= bs.get_end_tx_ack()):
-                                            # if data_rx_at_bs_ending_tick != ack_rx_at_bs_ending_tick:
                                             # Update the timing structure to reset this reception
                                             remove_item_in_timing_structure(
                                                 input_simulator_timing_structure=simulator_timing_structure,
@@ -4806,7 +4672,7 @@ for seed in range(initial_seed, final_seed + 1):
                                              input_rx_duration_tick=tot_simulation_time_tick + 1,
                                              input_enable_print=enable_print)
                             bs.id_ues_data_rx.clear()
-                            # bs.packet_rx = False
+
                             for ue in ue_array:
                                 new_list = deepcopy(simulator_timing_structure['BS']['ACK_RX'][f'UE_{ue.get_ue_id()}'])
                                 for i in range(len(new_list)):
@@ -4818,7 +4684,6 @@ for seed in range(initial_seed, final_seed + 1):
                                                 simulator_timing_structure['BS']['ACK_RX'][f'UE_{ue.get_ue_id()}'][:,
                                                 0][
                                                     1] <= bs.get_end_tx_ack()):
-                                            # if data_rx_at_bs_ending_tick != ack_rx_at_bs_ending_tick:
                                             # Update the timing structure to reset this reception
                                             remove_item_in_timing_structure(
                                                 input_simulator_timing_structure=simulator_timing_structure,
@@ -4838,7 +4703,6 @@ for seed in range(initial_seed, final_seed + 1):
                                                 simulator_timing_structure['BS']['DATA_RX'][f'UE_{ue.get_ue_id()}'][:,
                                                 0][
                                                     1] <= bs.get_end_tx_ack()):
-                                            # if data_rx_at_bs_ending_tick != ack_rx_at_bs_ending_tick:
                                             # Update the timing structure to reset this reception
                                             remove_item_in_timing_structure(
                                                 input_simulator_timing_structure=simulator_timing_structure,
@@ -4857,13 +4721,15 @@ for seed in range(initial_seed, final_seed + 1):
                         go_rx_ack_bs(input_bs=bs, current_tick=t, input_rx_duration_tick=tot_simulation_time_tick + 1,
                                      input_enable_print=enable_print)
 
-                # Move time forward based on the next occurring event
+                # Move time forward based on the next occurring event ->
+                # this allows to reduce computation time because we don't do a tick by tick simulation, but there is a
+                # jump to the next event (new state of a UE/BS, a reception or the end of a transmission and so on)
                 t_states_ues_tick = [ue.get_state_duration() for ue in ue_array]  # All UEs state duration
                 t_generations_ues_tick = [ue.get_next_packet_generation_instant() for ue in
                                           ue_array]  # All UEs state duration
                 t_state_bs_tick = bs.get_state_duration()  # BS state duration
-                # mobility
-                if mobility_obstacle  or mobility_spawn:
+
+                if mobility_obstacle or mobility_spawn:
                     if step_size == 4.5:
                         next_t_change = t_change + math.floor(tot_simulation_time_tick / 2)
                     elif step_size == 2.25:
@@ -4885,21 +4751,10 @@ for seed in range(initial_seed, final_seed + 1):
                         min_index = np.argmin(values_ext['ACK_RX'][key_int][:, 1])
                         min_row = values_ext['ACK_RX'][key_int][min_index, :]
                         final_rx_times = min(final_rx_times, min_row[1])
+                # Min(UEs state durations, BS state duration, generation times, reception times)
                 t_next = min(t_state_bs_tick, min(t_states_ues_tick),
                              min(t_generations_ues_tick), final_rx_times, next_t_change)
-                # print(f"t: ",t)
                 t = t_next  # Updated time
-
-                # Check if the skip configuration is enabled
-                if skip_config and t > int(tot_simulation_time_tick/skip_config_portion_time) and skip_config_executed is False:
-                    skip_config_executed = True
-                    for ue in ue_array:
-                        ue.n_data_tx = 0
-                        ue.n_data_discarded = 0
-                        ue.latency_ue = list()
-                        ue.energy_consumed = 0
-                        bs.n_data_rx_from_ues[f"UE_{ue.get_ue_id()}"] = 0
-
 
             """
             Compute simulation outputs
@@ -4907,121 +4762,12 @@ for seed in range(initial_seed, final_seed + 1):
             if enable_print:
                 print("Simulation ended at t = ", tot_simulation_time_tick)
 
-            # RL
-            # Compute the output only for the testing simulations (0-14: training; 15-34: testing)
-            if n_simulation > n_simulations - 21:
-                compute_simulator_outputs(ue_array=ue_array, bs=bs,
-                                          simulation_time_s=simulation_time_s if skip_config is False else (simulation_time_s * (1 - 1/skip_config_portion_time)),
-                                          inputs_dict=inputs,
-                                          output_dict=output_dict,
-                                          output_n_ue=n_ue, output_n_sim=n_simulation - 15)
-                for ue_index_inner, ue_inner in enumerate(ue_array):
-                    output_dict["avg_Q"][f"N={n_ue}"][f"Sim={n_simulation - 15}"][ue_index_inner] = np.mean(ue_inner.Q_and_W_saved_state_Q[n_simulation])
-                    output_dict["avg_W"][f"N={n_ue}"][f"Sim={n_simulation - 15}"][ue_index_inner] = np.mean(ue_inner.Q_and_W_saved_state_W[n_simulation])
-                    output_dict["Discarded_packets_full_queue_percentage"][f"N={n_ue}"][f"Sim={n_simulation - 15}"][ue_index_inner] = ue_inner.packets_discarded_full_queue / ue_inner.n_generated_packets * 100
-                    output_dict["Discarded_packets_max_rtx_percentage"][f"N={n_ue}"][f"Sim={n_simulation - 15}"][ue_index_inner] = ue_inner.packets_discarded_max_rtx / ue_inner.n_generated_packets * 100
+            compute_simulator_outputs(ue_array=ue_array, bs=bs, simulation_time_s=simulation_time_s, inputs_dict=inputs,
+                                      output_dict=output_dict,
+                                      output_n_ue=n_ue, output_n_sim=n_simulation)
 
-            # Reset the parameters for the next simulation and print the metrics
-            for ue in ue_array:
-                ue.append_W_simulations_reward(sum(ue.get_W_reward()))
-                ue.set_W_reward([])
-                ue.append_Q_simulations_reward(sum(ue.get_Q_reward()))
-                ue.set_Q_reward([])
-                print("UE ", ue.get_ue_id())
-
-                # Only W RL
-                print("number # 0 (W--): ", ue.W_action_list.count(0))
-                print("number # 1 (W++): ", ue.W_action_list.count(1))
-                print("number # 2 (W==): ", ue.W_action_list.count(2))
-                print("Average contention window: ", np.mean(ue.Q_and_W_saved_state_W[n_simulation]))
-
-                # Only Q RL
-                print("number # 0 (Q--): ", ue.Q_action_list.count(0))
-                print("number # 1 (Q++): ", ue.Q_action_list.count(1))
-                print("number # 2 (Q==): ", ue.Q_action_list.count(2))
-                print("Average buffer size: ", np.mean(ue.Q_and_W_saved_state_Q[n_simulation]))
-
-                if len(ue.W_replay_buffer) > 0:
-                    last_replay_instance = ue.get_last_W_replay_instance()
-                    ue.drop_last_W_replay_instance()
-                    ue.append_W_replay_buffer([last_replay_instance[0],
-                                             last_replay_instance[1],
-                                             last_replay_instance[2],
-                                             last_replay_instance[3],
-                                             True])
-                else:
-                    print("UE ", ue.get_ue_id(), " has not performed any W action")
-
-                if len(ue.Q_replay_buffer) > 0:
-                    last_replay_instance = ue.get_last_Q_replay_instance()
-                    ue.drop_last_Q_replay_instance()
-                    ue.append_Q_replay_buffer([last_replay_instance[0],
-                                             last_replay_instance[1],
-                                             last_replay_instance[2],
-                                             last_replay_instance[3],
-                                             True])
-                else:
-                    print("UE ", ue.get_ue_id(), " has not performed any Q action")
-
-                # Update the model after the n_simulations to populate the replay buffer
-                if n_simulation >= n_simulations_for_training:
-                    if DDQN and len(ue.W_replay_buffer) > 0:
-                        ue.W_model = training_step(input_batch_size=batch_size,
-                                                 input_n_actions=n_actions,
-                                                 input_replay_buffer=ue.get_W_replay_buffer(),
-                                                 input_model=ue.get_W_model(),
-                                                 input_target_model=ue.get_W_target_model())
-                    if DDQN and len(ue.Q_replay_buffer) > 0:
-                        ue.Q_model = training_step(input_batch_size=batch_size,
-                                                 input_n_actions=n_actions,
-                                                 input_replay_buffer=ue.get_Q_replay_buffer(),
-                                                 input_model=ue.get_Q_model(),
-                                                 input_target_model=ue.get_Q_target_model())
-
-                # Update the target model with the model every 15 simulations
-                if (n_simulation + 1) % 15 == 0 and DDQN:
-                    print(
-                        "########################################################## weights update ###########################################################################")
-                    ue.W_target_model = update_target_model(ue.get_W_model(), ue.get_W_target_model())
-                    ue.Q_target_model = update_target_model(ue.get_Q_model(), ue.get_Q_target_model())
-
-            # Free unused variables
             gc.collect()
             print(f"[DEBUG] Memory usage: {psutil.Process(os.getpid()).memory_info().rss / (1024 ** 2):.2f} MB")
-
-                # if n_simulation == n_simulations_for_training:
-                #     if enable_print:
-                #         print("***** starting RL training")
-                #     ue.set_best_weights(ue.model.get_weights())
-
-                # if ue.get_last_simulations_reward() > ue.get_best_score():
-                #     ue.set_best_score(ue.get_last_simulations_reward())
-                #     ue.set_best_weights(ue.model.get_weights())
-
-        """
-        Plot and save results
-        """
-
-        if DDQN:
-            path = "DDQN_MultiHops_Q_and_W"
-
-        for ue in ue_array:
-            plot_rewards_per_n_ue(input_ue_id=ue.get_ue_id(),
-                                  input_ue_simulations_reward=ue.get_W_simulations_reward(),
-                                  input_n_ue=n_ue,
-                                  input_save_path='multi_hop_industrial_simulator/results/plot_results/Q_and_W_only_W' + path + f"seed_{seed}")
-            plot_rewards_per_n_ue(input_ue_id=ue.get_ue_id(),
-                                  input_ue_simulations_reward=ue.get_Q_simulations_reward(),
-                                  input_n_ue=n_ue,
-                                  input_save_path='multi_hop_industrial_simulator/results/plot_results/Q_and_W_only_Q' + path + f"seed_{seed}")
-
-        ################################# Movement implementation #################################
-        """print("Convergence ticks of UE 3 to 0: ", convergence_tick_ue_3_to_0)
-        print("Average convergence ticks of U3 3 to 0: ", np.mean(convergence_tick_ue_3_to_0))
-        print("Convergence ticks of UE 3 to 1: ", convergence_tick_ue_3_to_1)
-        print("Average convergence ticks of U3 3 to 1: ", np.mean(convergence_tick_ue_3_to_1))"""
-        ################################# End Movement Implementation #############################
-
 
 """
     Plot and save results
@@ -5060,8 +4806,6 @@ print("S_net: ", averaged_data['s'])
 print("Latency: ", averaged_data['l'])
 print("Energy: ", averaged_data['e'])
 print("Jain Index: ", averaged_data['j_index'])
-print("Discarded_packet_full_queue: ", averaged_data['Discarded_packets_full_queue_percentage'])
-print("Discarded_packets_max_rtx: ", averaged_data['Discarded_packets_max_rtx_percentage'])
 
 averaged_ticks_BO = 0
 BO_instances = 0
@@ -5094,22 +4838,32 @@ print("Ticks in TX_DATA: ", averaged_ticks_TX_DATA / TX_DATA_instances)
 print("Ticks in WAIT_ACK: ", averaged_ticks_WAIT_ACK / WAIT_ACK_instances)
 print("Average Forced Broadcast Actions per Simulation: ",
       averaged_forced_broadcast_actions / n_simulations / len(ue_array))
+
 print("Average N forwarding per Simulation: ", averaged_n_forwarding / n_simulations / len(ue_array))
 print("Average number of interferers = ", tot_av_interferers / len(ue_array))
 
 # Get current date
 current_date = datetime.now()
 
-# Saving path
+# Format the date components
 year = current_date.year
 month = current_date.month
 day = current_date.day
-final_file_name_output_1 = 'multi_hop_industrial_simulator/results/' + path + f'{year}_{month:02d}_{day:02d}_' + 'TB_output_dict' + '_final_UEs_' + str(
-    final_number_of_ues) + '_Payload_' + str(payload_fq) + "_TTL_" + str(TTL) + '_TX_per_action_' + str(number_of_tx_data_per_step) + '_TTL_' + str(TTL) + '_goal_oriented_' + str(goal_oriented) + '_normalized_S_' + str(normalized_S) + "_discarded_pck" + "_skip_config_" + str(skip_config) + "_portion_time_1_over_" + str(skip_config_portion_time) + '_Q_and_W_replay_not_split.txt'
-final_file_name_output_2 = 'multi_hop_industrial_simulator/results/' + path + f'{year}_{month:02d}_{day:02d}_' + 'TB_averaged_data' + '_final_UEs_' + str(
-    final_number_of_ues) + '_Payload_' + str(payload_fq) + "_TTL_" + str(TTL) + '_TX_per_action_' + str(number_of_tx_data_per_step) + '_TTL_' + str(TTL) + '_goal_oriented_' + str(goal_oriented) + '_normalized_S_' + str(normalized_S) + "_discarded_pck" + "_skip_config_" + str(skip_config) + "_portion_time_1_over_" + str(skip_config_portion_time) +  '_Q_and_W_replay_not_split.txt'
-final_file_name_output_3 = 'multi_hop_industrial_simulator/results/' + path + f'{year}_{month:02d}_{day:02d}_' + 'TB_inputs' + '_final_UEs_' + str(
-    final_number_of_ues) + '_Payload_' + str(payload_fq) + "_TTL_" + str(TTL) + '_TX_per_action_' + str(number_of_tx_data_per_step) + '_TTL_' + str(TTL) + '_goal_oriented_' + str(goal_oriented) + '_normalized_S_' + str(normalized_S) + "_discarded_pck" + "_skip_config_" + str(skip_config) + "_portion_time_1_over_" + str(skip_config_portion_time) +  '_Q_and_W_replay_not_split.txt'
+final_file_name_output_1 = 'multi_hop_industrial_simulator/results/' + f'{year}_{month:02d}_{day:02d}_' + 'MADRL_TB_output_dict' + '_final_UEs_' + str(
+    final_number_of_ues) + '_Payload_' + str(payload_fq) + '_W_init_' + str(W_init) + '_Q_init_' + str(
+    Q_init) + '_TTL_' + str(TTL) + '.txt'
+final_file_name_output_2 = 'multi_hop_industrial_simulator/results/' + f'{year}_{month:02d}_{day:02d}_' + 'MADRL_TB_averaged_data' + '_final_UEs_' + str(
+    final_number_of_ues) + '_Payload_' + str(payload_fq) + '_W_init_' + str(W_init) + '_Q_init_' + str(
+    Q_init) + '_TTL_' + str(TTL) + '.txt'
+final_file_name_output_3 = 'multi_hop_industrial_simulator/results/' + f'{year}_{month:02d}_{day:02d}_' + 'MADRL_TB_inputs' + '_final_UEs_' + str(
+    final_number_of_ues) + '_Payload_' + str(payload_fq) + '_W_init_' + str(W_init) + '_Q_init_' + str(
+    Q_init) + '_TTL_' + str(TTL) + '.txt'
+final_file_name_output_4 = 'multi_hop_industrial_simulator/results/' + f'{year}_{month:02d}_{day:02d}_' + 'MADRL_TB_rewards' + '_final_UEs_' + str(
+    final_number_of_ues) + '_Payload_' + str(payload_fq) + '_W_init_' + str(W_init) + '_Q_init_' + str(
+    Q_init) + '_TTL_' + str(TTL) + '.txt'
+final_file_name_output_5 = 'multi_hop_industrial_simulator/results/' + f'{year}_{month:02d}_{day:02d}_' + 'MADRL_TB_policy_log' + '_final_UEs_' + str(
+    final_number_of_ues) + '_Payload_' + str(payload_fq) + '_W_init_' + str(W_init) + '_Q_init_' + str(
+    Q_init) + '_TTL_' + str(TTL) + '.txt'
 
 # Plot and save simulation output
 with open(final_file_name_output_1, "w") as file:
@@ -5118,4 +4872,29 @@ with open(final_file_name_output_2, "w") as file:
     file.write(json.dumps(averaged_data, indent=0, default=str))  # Adding indentation for readability
 with open(final_file_name_output_3, "w") as file:
     file.write(json.dumps(inputs, indent=0, default=str))  # Adding indentation for readability
+
+# ── Save per-UE reward history ────────────────────────────────────────────────
+madrl_rewards_dict = {f"UE_{ue.get_ue_id()}": ue.reward_history for ue in ue_array}
+with open(final_file_name_output_4, "w") as file:
+    file.write(json.dumps(madrl_rewards_dict, indent=0, default=str))
+print(f"Rewards saved → {final_file_name_output_4}")
+
+# ── Save per-UE policy / ablation log ────────────────────────────────────────
+madrl_policy_log = {}
+for ue in ue_array:
+    uid = f"UE_{ue.get_ue_id()}"
+    madrl_policy_log[uid] = {
+        "a1": ue.policy_a1_hist,  # W action  (0/1/2)
+        "a2": ue.policy_a2_hist,  # Q action  (0/1/2)
+        "explore": ue.policy_explore_hist,  # True=random, False=greedy
+        "W": ue.policy_W_hist,  # W value after action
+        "Q": ue.policy_Q_hist,  # Q value after action
+        "epsilon": ue.policy_epsilon_hist,  # ε at selection time
+        "nt_ratio": ue.policy_nt_ratio_hist,  # Nt/Nt_avg state feature
+        "buf_util": ue.policy_buf_util_hist,  # buffer utilisation state feature
+        "sim_idx": ue.policy_sim_hist,  # simulation index
+    }
+with open(final_file_name_output_5, "w") as file:
+    file.write(json.dumps(madrl_policy_log, indent=0, default=str))
+print(f"Policy log saved → {final_file_name_output_5}")
 
