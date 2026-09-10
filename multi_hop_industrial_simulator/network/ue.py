@@ -1046,7 +1046,7 @@ class Ue(TrafficModel):
         Returns:
             None
         """
-        if input_packet_id is not None:
+        if input_packet_id is not None and input_packet_id != False:
             packet = self.ul_buffer.get_packet_by_id(packet_id=input_packet_id)
             current_num_tx = packet.get_num_tx()
             packet.set_num_tx(input_num_tx=current_num_tx + 1, input_enable_print=input_enable_print)
